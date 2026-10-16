@@ -58,6 +58,8 @@ In both Maia modes, human nodes are weighted by Maia's probabilities, and the le
 
 `smartchess export --user <name>` writes the reviewed games to `site/` as a static site. There the frontend runs in read-only mode: no backend, no live analysis, no API keys. `bash scripts/deploy.sh -auto-approve` exports the site and uploads it with Terraform (`infra/`) to a private S3 bucket behind CloudFront, using the `job-radar` AWS profile, then invalidates the cache. Set `TF_VAR_password` to protect the site with basic auth (user `smartchess`).
 
+Demo games are hand-built records in `data/games/demo*.json` (with `"demo": true`, a `title`, an explicit `user_color` and optional `key_plies` that are always reviewed). They are listed first, both locally and in the shared site.
+
 ## Explanations
 
 Explanations are built from facts: candidate lines, traps, critical moments, and simple motifs such as captures, checks and attacks on undefended pieces. When `GROQ_API_KEY` is set (in the environment or in `.env`), an LLM on Groq rewrites these facts as friendly prose. It uses `qwen3.8-27b` and falls back to `gpt-oss-120b`; when both are rate limited it waits instead of switching to a weaker model. Any piece move the LLM mentions that is not in the facts makes the answer rejected, and the template text is used instead.

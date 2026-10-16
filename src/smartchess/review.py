@@ -181,6 +181,7 @@ def review_game(
     skip_plies: int = 6,
     prepass_depth: int = 14,
     progress: Callable[[str, float], None] = _stderr,
+    force_plies: tuple[int, ...] = (),
 ) -> GameReview:
     """Two kinds of key moments, each with its own budget.
 
@@ -245,8 +246,11 @@ def review_game(
         pool.append(((max(policy.get(line.move, 0.0) for line in alternatives) - best_nat) * balance, info))
     mistakes = sorted(mistakes, key=lambda i: i.loss, reverse=True)[:max_mistakes]
     pool_infos = [info for _, info in sorted(pool, key=lambda x: x[0], reverse=True)[:choice_pool]]
+    # Demo games can name moments that must be shown, whatever the heuristics say.
+    chosen_plies = {i.ply for i in mistakes} | {i.ply for i in pool_infos}
+    forced = [p for p in plies if p.ply in force_plies and p.ply not in chosen_plies]
 
-    todo = [(info, "mistake") for info in mistakes] + [(info, "choice") for info in pool_infos]
+    todo = [(info, "mistake") for info in mistakes] + [(info, "choice") for info in pool_infos + forced]
 
     def deep(engine: Stockfish, item) -> MoveReview:
         info, kind = item
@@ -266,7 +270,7 @@ def review_game(
     reviews: list[MoveReview] = []
     for review in analysed:
         a = review.analysis
-        if review.kind == "choice":
+        if review.kind == "choice" and review.ply not in force_plies:
             review.gain = max(a.simplest.simple - a.best.simple, a.trickiest.tricky - a.best.tricky)
             differs = a.simplest.move != a.best.move or a.trickiest.move != a.best.move
             if not differs or review.gain < CHOICE_GAIN:

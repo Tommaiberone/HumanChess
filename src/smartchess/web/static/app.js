@@ -254,9 +254,10 @@ function gameRow(g) {
       el('span', { class: 'muted small' },
         [r.mistakes ? `${KINDS.mistake.icon} ${r.mistakes}` : null, r.choices ? `${KINDS.choice.icon} ${r.choices}` : null].filter(Boolean).join('  ') || 'no critical moments')]
     : [el('span', { class: 'tag' }, 'not reviewed'), el('span', { class: 'muted small' }, `you ${g.user_rating}`)];
-  return el('a', { class: `game-row r-${g.result}`, href: `#/game/${g.id}` },
+  return el('a', { class: `game-row r-${g.result}${g.demo ? ' demo' : ''}`, href: `#/game/${g.id}` },
     el('span', { class: 'result-badge', title: result[1] }, result[0]),
     el('span', { class: 'game-main' },
+      g.demo && g.title ? el('span', { class: 'demo-title' }, el('span', { class: 'tag demo' }, 'demo'), g.title) : null,
       el('span', { class: 'game-title' },
         el('span', { class: `piece-dot ${g.user_color}`, title: g.user_color === 'white' ? 'you had White' : 'you had Black' }),
         'vs ', el('b', {}, g.opponent), el('span', { class: 'muted' }, ` (${g.opponent_rating})`)),
@@ -478,6 +479,7 @@ function buildLayout(app) {
             el('a', { class: 'back', href: '#/' }, '← games'),
             S.meta.url ? el('a', { class: 'back', href: S.meta.url, target: '_blank', rel: 'noopener' }, 'on Chess.com ↗') : null),
           el('div', { class: 'side-title' },
+            S.meta.demo ? el('span', { class: 'demo-title' }, el('span', { class: 'tag demo' }, 'demo'), S.meta.title || '') : null,
             el('b', {}, `${S.user} vs ${S.meta.opponent}`),
             el('span', { class: 'muted small' }, opening)),
           d.summary,
@@ -690,7 +692,7 @@ function drawShapes() {
   const advice = currentAdvice();
   if (advice) {
     const groups = adviceGroups(advice);
-    const sel = S.sel ?? defaultGroup(groups, advice.kind);
+    const sel = S.sel ?? defaultGroup(groups, advice.kind, advice.critical ? advice.facts.played : null);
     groups.forEach((g, i) => {
       const role = g.roles[0];
       out.push({ orig: g.c.uci.slice(0, 2), dest: g.c.uci.slice(2, 4), brush: i === sel ? ROLES[role].brush : `${ROLES[role].brush}Faded` });
@@ -1101,7 +1103,11 @@ function adviceGroups(advice) {
 // For a practical choice open on the alternative (that is the point of the
 // moment); for a mistake open on the best move.
 
-function defaultGroup(groups, kind) {
+function defaultGroup(groups, kind, played) {
+  // If you played the simplest or trickiest move, open on it; otherwise, for a
+  // practical choice, on the alternative to the best move.
+  const mine = played ? groups.findIndex(g => g.c.uci === played.uci && g.roles.some(r => r !== 'best')) : -1;
+  if (mine >= 0) return mine;
   if (kind === 'choice' && groups.length > 1) return 1;
   return 0;
 }
@@ -1118,7 +1124,7 @@ function selectGroup(i) {
 function optionsSection(advice, { playedLine = null } = {}) {
   const groups = adviceGroups(advice);
   const n = advice.narration || {};
-  if (S.sel == null || S.sel >= groups.length) S.sel = defaultGroup(groups, advice.kind);
+  if (S.sel == null || S.sel >= groups.length) S.sel = defaultGroup(groups, advice.kind, advice.critical ? advice.facts.played : null);
   const out = [];
   if (groups.length > 1) {
     out.push(el('div', { class: 'role-tabs', role: 'tablist' }, ...groups.map((g, i) =>

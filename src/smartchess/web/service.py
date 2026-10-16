@@ -86,6 +86,13 @@ class Service:
     def list_games(self, username: str, limit: int = 30, time_class: str | None = None) -> list[dict]:
         raw = chesscom_raw_games(username, limit, time_class)
         out = []
+        for path in sorted((self.data_dir / "games").glob("demo*.json")):
+            demo = json.loads(path.read_text(encoding="utf-8"))
+            if not time_class or demo.get("time_class") == time_class:
+                summary = chesscom_summary(demo, username)
+                self._games[summary["id"]] = demo
+                summary["review"] = self._review_brief(summary["id"])
+                out.append(summary)
         for g in raw:
             summary = chesscom_summary(g, username)
             self._games[summary["id"]] = g
@@ -170,7 +177,8 @@ class Service:
         def progress(msg: str, fraction: float) -> None:
             job.message, job.fraction = msg, fraction
 
-        review = review_game(game, engines, human, self.settings, players, progress=progress)
+        review = review_game(game, engines, human, self.settings, players, progress=progress,
+                             force_plies=tuple(raw.get("key_plies", ())))
         narrations = {}
         analysed = [mr for mr in review.moves if mr.analysis is not None]
         for i, mr in enumerate(analysed, start=1):

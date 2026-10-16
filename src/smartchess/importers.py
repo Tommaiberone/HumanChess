@@ -55,15 +55,24 @@ def chesscom_raw_games(username: str, max_games: int = 30, time_class: str | Non
 
 
 def chesscom_summary(g: dict, username: str) -> dict:
-    """The fields the game list needs, from the user's point of view."""
+    """The fields the game list needs, from the user's point of view.
+
+    Besides Chess.com games this accepts hand-built demo records, which carry their
+    own "id", "user_color" and "title", and no "url".
+    """
     name = username.lower()
-    user_is_white = g["white"]["username"].lower() == name
+    if g.get("user_color"):
+        user_is_white = g["user_color"] == "white"
+    else:
+        user_is_white = g["white"]["username"].lower() == name
     me, opp = (g["white"], g["black"]) if user_is_white else (g["black"], g["white"])
     result = "win" if me["result"] == "win" else "draw" if me["result"] in DRAW_RESULTS else "loss"
-    opening = g.get("eco", "").rstrip("/").rsplit("/", 1)[-1].replace("-", " ")
+    opening = g.get("opening") or g.get("eco", "").rstrip("/").rsplit("/", 1)[-1].replace("-", " ")
     return {
-        "id": g["url"].rstrip("/").rsplit("/", 1)[-1],
-        "url": g["url"],
+        "id": g.get("id") or g["url"].rstrip("/").rsplit("/", 1)[-1],
+        "url": g.get("url"),
+        "demo": bool(g.get("demo")),
+        "title": g.get("title"),
         "end_time": g.get("end_time"),
         "time_class": g.get("time_class"),
         "time_control": g.get("time_control"),

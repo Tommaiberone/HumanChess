@@ -42,7 +42,8 @@ def export_site(service: Service, out: Path, username: str) -> list[str]:
         _write(out / "data" / "games" / f"{game_id}.json", moves)
         shutil.copyfile(review_path, out / "data" / "reviews" / f"{game_id}.json")
 
-    games.sort(key=lambda g: g.get("end_time") or 0, reverse=True)
+    # Demo games first, then the real ones from the newest.
+    games.sort(key=lambda g: (g.get("demo", False), g.get("end_time") or 0), reverse=True)
     _write(out / "data" / "games.json", games)
     _write(out / "data" / "config.json", {"username": username, "static": True})
     return [g["id"] for g in games]

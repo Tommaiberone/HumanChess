@@ -417,3 +417,8 @@ main:has(.review) { padding-bottom: 0; max-width: none; }
 body:has(.review) .topbar { max-width: none; padding-left: 28px; padding-right: 28px; }
 .list-title { font-size: 20px; margin-bottom: 4px; }
 .showcase-note { text-align: center; margin-top: 14px; }
+
+/* ---------- demo games */
+.tag.demo { background: var(--choice-bg); color: var(--choice); margin: 0 8px 0 0; text-transform: uppercase; letter-spacing: .04em; }
+.demo-title { font-weight: 800; font-size: 15px; display: flex; align-items: center; margin-bottom: 2px; }
+.game-row.demo { border-color: var(--choice-bg); }
