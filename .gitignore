@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+
+# Downloaded binaries and model weights
+engines/
+models/
+
+# Generated reports and local data
+reports/
+data/
+
+# Secrets
+.env
+*.log

@@ -1,0 +1,33 @@
+[project]
+name = "smartchess"
+version = "0.1.0"
+description = "Human-aware chess game review: best move, simplest move and trickiest move within a small margin"
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+requires-python = ">=3.10"
+dependencies = [
+    "chess>=1.11",
+    "maia3 @ git+https://github.com/CSSLab/maia3",
+    "requests>=2.31",
+    "fastapi>=0.110",
+    "uvicorn>=0.30",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[project.scripts]
+smartchess = "smartchess.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/smartchess"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
