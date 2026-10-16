@@ -16,4 +16,10 @@ data/
 
 # Secrets
 .env
+
+# Static export and Terraform working files
+site/
+infra/.terraform/
+*.tfstate
+*.tfstate.backup
 *.log

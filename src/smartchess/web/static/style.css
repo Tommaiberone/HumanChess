@@ -202,9 +202,18 @@ cg-board square.move-dest { background: radial-gradient(rgba(79, 105, 70, .5) 22
 cg-board square.oc.move-dest { background: radial-gradient(transparent 0%, transparent 79%, rgba(79, 105, 70, .45) 80%); }
 cg-board square.move-dest:hover { background: rgba(111, 143, 99, .35); }
 cg-board square.check { background: radial-gradient(ellipse at center, rgba(200, 60, 40, .9) 0%, rgba(200, 60, 40, .35) 45%, transparent 75%); }
-.cg-wrap coords { font-family: Nunito, sans-serif; font-weight: 800; font-size: 11px; }
-/* One color with a soft halo stays readable on both square colors. */
-.cg-wrap coords coord { color: #5a3e2b; text-shadow: 0 0 3px rgba(255, 246, 232, .9), 0 0 1px rgba(255, 246, 232, .9); }
+/* Coordinates inside the edge squares, Lichess style: ranks top-left, files
+   bottom-right, each colored against its own square. Overrides chessground's
+   base offsets, which are tuned for Lichess's layout. */
+.cg-wrap coords { font-family: Nunito, sans-serif; font-weight: 800; opacity: 1;
+  font-size: clamp(9px, calc(var(--board, 560px) / 50), 13px); line-height: 1; }
+.cg-wrap coords.ranks { left: 3px; top: 3px; width: auto; height: 100%; }
+.cg-wrap coords.ranks coord { flex: 1 1 0; transform: none; }
+.cg-wrap coords.files { left: 0; bottom: 3px; width: 100%; height: auto; text-transform: lowercase; }
+.cg-wrap coords.files coord { flex: 1 1 0; text-align: right; padding-right: 4px; }
+.cg-wrap coords coord { color: var(--coord-on-light); }
+.cg-wrap coords:not(.black) coord:nth-child(odd),
+.cg-wrap coords.black coord:nth-child(even) { color: var(--coord-on-dark); }
 
 /* ---------- eval bar */
 .evalbar { position: relative; border-radius: 8px; overflow: hidden; background: var(--eval-black); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15); }
@@ -406,3 +415,5 @@ cg-board square.check { background: radial-gradient(ellipse at center, rgba(200,
 main:has(.review) { padding-bottom: 0; max-width: none; }
 
 body:has(.review) .topbar { max-width: none; padding-left: 28px; padding-right: 28px; }
+.list-title { font-size: 20px; margin-bottom: 4px; }
+.showcase-note { text-align: center; margin-top: 14px; }

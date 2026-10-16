@@ -25,6 +25,8 @@ from ..practical import Players, Searcher, Settings
 from ..review import game_players, review_game
 from ..winprob import format_cp
 
+STATIC_DIR = Path(__file__).parent / "static"
+
 
 @dataclass
 class Job:

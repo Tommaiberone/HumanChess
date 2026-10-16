@@ -21,7 +21,35 @@ function el(tag, props = {}, ...kids) {
   return e;
 }
 
+// In the shared static site there is no backend: reads come from data/*.json and
+// anything that needs the engines is unavailable.
+const STATIC = document.querySelector('meta[name="smartchess-mode"]')?.content === 'static';
+
+function staticPath(path) {
+  const url = new URL(path, location.origin);
+  const p = url.pathname;
+  if (p === '/api/config') return '/data/config.json';
+  if (p === '/api/games') return '/data/games.json';
+  let m = p.match(/^\/api\/games\/(\w+)$/);
+  if (m) return `/data/games/${m[1]}.json`;
+  m = p.match(/^\/api\/reviews\/(\w+)$/);
+  if (m) return `/data/reviews/${m[1]}.json`;
+  return null;
+}
+
 async function api(path, opts) {
+  if (STATIC) {
+    const file = !opts?.method || opts.method === 'GET' ? staticPath(path) : null;
+    if (!file) throw new Error('Non disponibile nella versione condivisa');
+    const r = await fetch(file);
+    if (!r.ok) throw new Error(r.status === 404 || r.status === 403 ? 'Non trovato' : r.statusText);
+    const data = await r.json();
+    if (file === '/data/games.json') {
+      const tc = new URL(path, location.origin).searchParams.get('time_class');
+      return tc ? data.filter(g => g.time_class === tc) : data;
+    }
+    return data;
+  }
   const r = await fetch(path, opts);
   if (!r.ok) {
     const body = await r.json().catch(() => ({}));
@@ -158,7 +186,7 @@ function route() {
 async function renderHome() {
   const app = $('#app');
   const cfg = await api('/api/config').catch(() => ({}));
-  let user = store.get('user', '') || cfg.username || '';
+  let user = STATIC ? cfg.username : store.get('user', '') || cfg.username || '';
   let tc = store.get('tc', 'rapid');
 
   const input = el('input', { class: 'input', value: user, placeholder: 'username Chess.com', autocomplete: 'off', 'aria-label': 'Username Chess.com' });
@@ -172,8 +200,10 @@ async function renderHome() {
   }
 
   async function load() {
-    user = input.value.trim();
-    store.set('user', user);
+    if (!STATIC) {
+      user = input.value.trim();
+      store.set('user', user);
+    }
     if (!user) {
       list.replaceChildren(el('p', { class: 'muted' }, 'Scrivi il tuo username per vedere le partite.'));
       return;
@@ -195,19 +225,20 @@ async function renderHome() {
     el('span', { class: `pill ${role}` }, title), el('p', {}, text));
 
   drawChips();
+  const form = STATIC
+    ? el('h2', { class: 'list-title' }, `Le partite di ${user}`)
+    : el('form', { class: 'user-form', onsubmit: e => { e.preventDefault(); load(); } },
+      input, el('button', { class: 'btn primary', type: 'submit' }, 'Carica'));
   app.replaceChildren(
     el('section', { class: 'hero' },
-      el('h1', {}, 'Le tue partite, spiegate con calma'),
+      el('h1', {}, STATIC ? 'Partite di scacchi, spiegate con calma' : 'Le tue partite, spiegate con calma'),
       el('p', { class: 'muted' }, 'Rivediamo insieme gli errori e le scelte pratiche: per ogni momento chiave ti mostro tre strade.')),
     el('section', { class: 'how-grid' },
       how('best', 'Migliore', 'La mossa più forte secondo Stockfish.'),
       how('simple', 'Più semplice', 'Cede al massimo 0,6 pedoni alla migliore, ma è facile da portare avanti al tuo livello.'),
       how('tricky', 'Più insidiosa', "Cede al massimo 1 pedone, in cambio di più occasioni di errore per l'avversario.")),
-    el('section', { class: 'card' },
-      el('form', { class: 'user-form', onsubmit: e => { e.preventDefault(); load(); } },
-        input, el('button', { class: 'btn primary', type: 'submit' }, 'Carica')),
-      chips,
-      list),
+    el('section', { class: 'card' }, form, chips, list),
+    STATIC ? el('p', { class: 'muted tiny showcase-note' }, 'Versione condivisa: le analisi sono state fatte in locale con Stockfish e Maia-3, le spiegazioni scritte da un LLM su quei dati.') : null,
   );
   load();
 }
@@ -324,7 +355,8 @@ async function renderReview(id, startPly = 0) {
   try {
     setReview(await api(`/api/reviews/${id}`));
   } catch {
-    runReviewJob();
+    if (STATIC) S.job = { status: 'error', error: 'Questa partita non è stata analizzata.' };
+    else runReviewJob();
   }
   update();
 }
@@ -475,7 +507,7 @@ function buildLayout(app) {
       },
     },
   });
-  const onResize = () => S.cg.redrawAll();
+  const onResize = () => fitBoard();
   const onKey = e => {
     if (e.target.matches('input, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
@@ -498,6 +530,22 @@ function buildLayout(app) {
   updateSoundButton();
   updateTabs();
   buildMoveList();
+  fitBoard();
+}
+
+// Chessground rounds the board down to a multiple of 8 device pixels, which left a
+// strip of empty frame on the right and bottom. Size the frame to that same
+// multiple so the squares fill it exactly, whatever the display scaling.
+function fitBoard() {
+  const review = $('.review');
+  if (!review) return;
+  const w = innerWidth, h = innerHeight;
+  const side = Math.min(460, Math.max(360, w * 0.32));
+  const target = w <= 1020 ? w - 70 : Math.min(h - 225, w - side - 120, 820);
+  const dpr = devicePixelRatio || 1;
+  const size = Math.floor((Math.max(300, target) * dpr) / 8) * 8 / dpr;
+  review.style.setProperty('--board', `${size}px`);
+  S.cg?.redrawAll();
 }
 
 function toggleSound() {
@@ -852,7 +900,7 @@ function reviewProgress() {
   const job = S.job;
   if (job?.status === 'error') {
     return [coachHead('Qualcosa è andato storto'), el('p', { class: 'error' }, job.error || 'Errore'),
-      el('button', { class: 'btn', onclick: () => { S.job = null; runReviewJob(); } }, 'Riprova')];
+      STATIC ? el('a', { class: 'btn', href: '#/' }, '← Torna alle partite') : el('button', { class: 'btn', onclick: () => { S.job = null; runReviewJob(); } }, 'Riprova')];
   }
   const msg = job?.message || 'In coda';
   const f = job?.fraction || 0;
@@ -940,6 +988,7 @@ function moveInfo() {
 }
 
 function analyseButton() {
+  if (STATIC) return el('p', { class: 'muted small' }, "Puoi provare varianti muovendo i pezzi; l'analisi dal vivo c'è solo nella versione locale.");
   const key = currentHistory().join(' ');
   const pj = S.posJob?.key === key ? S.posJob.job : null;
   if (pj && pj.status !== 'done' && pj.status !== 'error') {
@@ -1002,7 +1051,7 @@ function optionsView(advice) {
   return out;
 }
 
-function narrationFooter(n, canRegenerate = true) {
+function narrationFooter(n, canRegenerate = !STATIC) {
   const nj = S.narrJob;
   const source = n.source === 'template' ? 'Spiegazioni automatiche (LLM non disponibile)'
     : n.source ? `Spiegazioni di ${n.source} sui dati di Stockfish e Maia` : '';

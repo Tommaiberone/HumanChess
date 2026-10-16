@@ -27,6 +27,7 @@ Utente: 1400 rapid su Chess.com, che corrispondono a circa 1700 sulla scala Maia
 - [x] **5. Web app locale** "cozy" in stile Chess.com: elenco partite, review con barra di valutazione, grafico, precisione, icone delle mosse, momenti chiave con tre proposte, varianti e analisi di qualsiasi posizione.
   - [ ] Import da Lichess e aperture dal Lichess Opening Explorer.
   - [ ] Opzionale: Lambda AWS per analizzare in parallelo le posizioni critiche.
+  - [x] Versione vetrina statica su S3 + CloudFront (`scripts/deploy.sh`): https://d10viis4vhdzq8.cloudfront.net/
 - [ ] **6. Prestazioni**: inferenza Maia a batch per nodo, prima passata più leggera, analisi in parallelo.
 
 ## Parametri da rivedere

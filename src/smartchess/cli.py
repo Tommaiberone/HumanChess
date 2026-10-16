@@ -160,8 +160,26 @@ def main(argv=None) -> int:
     _add_common(web)
     web.set_defaults(func=cmd_web)
 
+    exp = sub.add_parser("export", help="write the reviewed games as a static site (read-only showcase)")
+    exp.add_argument("--user", required=True, help="Chess.com username the reviews belong to")
+    exp.add_argument("--out", default="site")
+    exp.set_defaults(func=cmd_export)
+
     args = parser.parse_args(argv)
     return args.func(args)
+
+
+def cmd_export(args) -> int:
+    from .web.export import export_site
+    from .web.service import Service
+
+    service = Service()
+    try:
+        ids = export_site(service, Path(args.out), args.user)
+    finally:
+        service.close()
+    print(f"Esportate {len(ids)} partite in {Path(args.out).resolve()}")
+    return 0
 
 
 def cmd_web(args) -> int:
