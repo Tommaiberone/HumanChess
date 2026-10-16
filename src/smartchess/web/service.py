@@ -33,7 +33,7 @@ class Job:
     id: str
     kind: str
     status: str = "queued"  # queued | running | done | error
-    message: str = "In coda"
+    message: str = "Queued"
     fraction: float = 0.0
     result: dict | None = None
     error: str | None = None
@@ -174,7 +174,7 @@ class Service:
         narrations = {}
         analysed = [mr for mr in review.moves if mr.analysis is not None]
         for i, mr in enumerate(analysed, start=1):
-            progress(f"Scrivo le spiegazioni {i}/{len(analysed)}", 0.9 + 0.1 * (i - 1) / len(analysed))
+            progress(f"Writing the explanations {i}/{len(analysed)}", 0.9 + 0.1 * (i - 1) / len(analysed))
             facts = position_facts(mr.analysis, mr.played, mr.played_cp,
                                    mr.played_line.pv if mr.played_line else None, mr.kind)
             narrations[mr.ply] = narrate(mr.analysis, facts)
@@ -196,7 +196,7 @@ class Service:
             raise KeyError(game_id)
         items = list(review["critical"].values())
         for i, item in enumerate(items, start=1):
-            job.message, job.fraction = f"Scrivo le spiegazioni {i}/{len(items)}", (i - 1) / len(items)
+            job.message, job.fraction = f"Writing the explanations {i}/{len(items)}", (i - 1) / len(items)
             drafts = (item.get("narration") or {}).get("drafts")
             try:
                 data, model = explain(item["facts"], drafts)
@@ -220,10 +220,10 @@ class Service:
         board = chess.Board(start_fen)
         for uci in moves:
             board.push_uci(uci)
-        job.message, job.fraction = "Cerco le mosse candidate", 0.1
+        job.message, job.fraction = "Finding candidate moves", 0.1
         players = Players(board.turn, user_elo, opp_elo)
         analysis = Searcher(engine, human, players, self.settings).analyse(board)
-        job.message, job.fraction = "Scrivo la spiegazione", 0.85
+        job.message, job.fraction = "Writing the explanation", 0.85
         facts = position_facts(analysis)
         return {"facts": facts, "narration": narrate(analysis, facts), "eval": format_cp(analysis.best.line.cp)}
 
@@ -238,9 +238,9 @@ class Service:
         return self._jobs.get(job_id)
 
     def _run(self, job: Job, fn, *args) -> None:
-        job.status, job.message, job.started = "running", "Preparo i motori", time.time()
+        job.status, job.message, job.started = "running", "Starting the engines", time.time()
         try:
             job.result = fn(job, *args)
-            job.status, job.fraction, job.message = "done", 1.0, "Fatto"
+            job.status, job.fraction, job.message = "done", 1.0, "Done"
         except Exception as exc:  # surfaced to the UI
             job.status, job.error = "error", f"{type(exc).__name__}: {exc}"

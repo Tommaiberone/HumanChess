@@ -86,12 +86,12 @@ def _position_html(mr: MoveReview) -> str:
         size=340,
     )
     loss_cp = mr.best_cp - mr.played_cp
-    loss = "decisiva" if abs(loss_cp) > 2000 else f"{loss_cp / 100:.2f}"
+    loss = "decisive" if abs(loss_cp) > 2000 else f"{loss_cp / 100:.2f}"
     parts = [
         f'<section class="pos"><div>{svg}</div><div>',
         f"<h2>{html.escape(numbered(board, mr.played))}</h2>",
-        f'<div class="played">Hai giocato {html.escape(board.san(mr.played))} '
-        f"({format_cp(mr.played_cp)}) · perdita {loss}</div>",
+        f'<div class="played">You played {html.escape(board.san(mr.played))} '
+        f"({format_cp(mr.played_cp)}) · loss {loss}</div>",
     ]
     for adv in advise(a):
         c = adv.candidate
@@ -100,8 +100,8 @@ def _position_html(mr: MoveReview) -> str:
         parts.extend(f"<p>{html.escape(line)}</p>" for line in adv.text)
         parts.append("</div>")
     parts.append(
-        "<table><tr><th>Mossa</th><th>Stockfish</th><th>Al tuo livello</th>"
-        "<th>Vs umano</th><th>Naturale</th><th>Errore avv.</th></tr>"
+        "<table><tr><th>Move</th><th>Stockfish</th><th>At your level</th>"
+        "<th>Vs a human</th><th>Natural</th><th>Opp. error</th></tr>"
     )
     for c in a.candidates:
         parts.append(
@@ -118,18 +118,18 @@ def write_report(review: GameReview, path: str | Path) -> Path:
     p = review.players
     title = f"{h.get('White', '?')} – {h.get('Black', '?')}"
     meta = (
-        f"{h.get('Date', '')} · {h.get('Result', '')} · Elo Maia: tu {p.user_elo}, avversario {p.opp_elo}"
+        f"{h.get('Date', '')} · {h.get('Result', '')} · Maia Elo: you {p.user_elo}, opponent {p.opp_elo}"
     )
     link = h.get("Link", "")
     if link:
-        meta += f' · <a href="{html.escape(link)}">partita</a>'
+        meta += f' · <a href="{html.escape(link)}">game</a>'
     legend = "".join(
         f'<span><i style="background:{ROLE_COLORS[r]}"></i>{label}</span>'
-        for r, label in [("best", "migliore"), ("simple", "più semplice"), ("tricky", "più insidiosa"), ("played", "giocata")]
+        for r, label in [("best", "best"), ("simple", "simplest"), ("tricky", "trickiest"), ("played", "played")]
     )
-    body = "".join(_position_html(mr) for mr in review.moves if mr.analysis) or "<p>Nessuna posizione critica trovata.</p>"
+    body = "".join(_position_html(mr) for mr in review.moves if mr.analysis) or "<p>No critical positions found.</p>"
     doc = (
-        f'<!doctype html><html lang="it"><head><meta charset="utf-8">'
+        f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
         f'<meta name="viewport" content="width=device-width, initial-scale=1">'
         f"<title>SmartChess review</title><style>{CSS}</style></head><body><main>"
         f"<h1>{html.escape(title)}</h1><div class=\"meta\">{meta}</div>"

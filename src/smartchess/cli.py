@@ -48,9 +48,9 @@ def _print_analysis(analysis, header: str, played=None, played_cp=None, use_llm:
     print(header)
     if n.get("summary"):
         print(f"  {n['summary']}")
-    for role, title in (("best", "Migliore"), ("simple", "Più semplice"), ("tricky", "Più insidiosa")):
+    for role, title in (("best", "Best"), ("simple", "Simplest"), ("tricky", "Trickiest")):
         c = {"best": analysis.best, "simple": analysis.simplest, "tricky": analysis.trickiest}[role]
-        print(f"  {title:<14} {numbered(analysis.board, c.move):<12} {format_cp(c.line.cp):>6}\n      {n[role]}")
+        print(f"  {title:<10} {numbered(analysis.board, c.move):<12} {format_cp(c.line.cp):>6}\n      {n[role]}")
     print(f"  [{n['source']}]" + (f" {n['error']}" if n.get("error") else ""))
 
 
@@ -80,7 +80,7 @@ def cmd_position(args) -> int:
     finally:
         for e in engines:
             e.close()
-    header = f"Posizione: {board.fen()}  (Elo Maia: tu {players.user_elo}, avversario {players.opp_elo})"
+    header = f"Position: {board.fen()}  (Maia Elo: you {players.user_elo}, opponent {players.opp_elo})"
     _print_analysis(analysis, header, use_llm=args.llm)
     return 0
 
@@ -97,7 +97,7 @@ def cmd_review(args) -> int:
         games = read_pgn_file(args.pgn)[: args.games]
         username = args.user
     if not games:
-        print("Nessuna partita trovata.", file=sys.stderr)
+        print("No games found.", file=sys.stderr)
         return 1
 
     engines, human = _engines(args)
@@ -106,7 +106,7 @@ def cmd_review(args) -> int:
             color = {"white": chess.WHITE, "black": chess.BLACK}.get(args.color) if args.color else None
             color = color if color is not None else detect_user_color(game, username)
             if color is None:
-                print("Non riesco a capire quale colore hai giocato: usa --user o --color.", file=sys.stderr)
+                print("Cannot tell which colour you played: use --user or --color.", file=sys.stderr)
                 return 1
             players = game_players(game, color, args.elo, args.opp_elo)
             h = game.headers
@@ -115,9 +115,9 @@ def cmd_review(args) -> int:
             review = review_game(game, engines, human, _settings(args), players, max_mistakes=args.max_mistakes,
                                  max_choices=args.max_choices, skip_plies=args.skip_plies)
             for mr in review.moves:
-                kind = "ERRORE" if mr.kind == "mistake" else "SCELTA PRATICA"
-                header = (f"\n[{kind}] {numbered(mr.board, mr.played)} giocata ({format_cp(mr.played_cp)}), "
-                          f"migliore {format_cp(mr.best_cp)}")
+                kind = "MISTAKE" if mr.kind == "mistake" else "PRACTICAL CHOICE"
+                header = (f"\n[{kind}] {numbered(mr.board, mr.played)} played ({format_cp(mr.played_cp)}), "
+                          f"best {format_cp(mr.best_cp)}")
                 _print_analysis(mr.analysis, header, mr.played, mr.played_cp, args.llm)
             if not args.no_html:
                 name = _safe_name(f"{h.get('Date', '')}_{h.get('White', '')}-{h.get('Black', '')}")
@@ -186,7 +186,7 @@ def cmd_export(args) -> int:
         ids = export_site(service, Path(args.out), args.user)
     finally:
         service.close()
-    print(f"Esportate {len(ids)} partite in {Path(args.out).resolve()}")
+    print(f"Exported {len(ids)} games to {Path(args.out).resolve()}")
     return 0
 
 

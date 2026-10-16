@@ -1,8 +1,8 @@
-"""Tactical and positional themes, in Italian and in the second person.
+"""Tactical and positional themes, in the second person.
 
 These are cheap board facts (no engine): the LLM uses them to explain *why* a
-move works, so ownership is always explicit ("il tuo Alfiere", "la Torre
-dell'avversario"); without it LLMs regularly mix up whose piece is attacked.
+move works, so ownership is always explicit ("your bishop", "the opponent's
+rook"); without it LLMs regularly mix up whose piece is attacked.
 """
 
 from __future__ import annotations
@@ -11,27 +11,20 @@ import chess
 
 VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 100}
 NAMES = {
-    chess.PAWN: "il pedone",
-    chess.KNIGHT: "il Cavallo",
-    chess.BISHOP: "l'Alfiere",
-    chess.ROOK: "la Torre",
-    chess.QUEEN: "la Donna",
-    chess.KING: "il Re",
+    chess.PAWN: "pawn",
+    chess.KNIGHT: "knight",
+    chess.BISHOP: "bishop",
+    chess.ROOK: "rook",
+    chess.QUEEN: "queen",
+    chess.KING: "king",
 }
-YOUR = {
-    chess.PAWN: "il tuo pedone",
-    chess.KNIGHT: "il tuo Cavallo",
-    chess.BISHOP: "il tuo Alfiere",
-    chess.ROOK: "la tua Torre",
-    chess.QUEEN: "la tua Donna",
-    chess.KING: "il tuo Re",
-}
+YOUR = {pt: f"your {name}" for pt, name in NAMES.items()}
 PLURALS = {
-    chess.QUEEN: ("Donna", "Donne"),
-    chess.ROOK: ("Torre", "Torri"),
-    chess.BISHOP: ("Alfiere", "Alfieri"),
-    chess.KNIGHT: ("Cavallo", "Cavalli"),
-    chess.PAWN: ("pedone", "pedoni"),
+    chess.QUEEN: ("queen", "queens"),
+    chess.ROOK: ("rook", "rooks"),
+    chess.BISHOP: ("bishop", "bishops"),
+    chess.KNIGHT: ("knight", "knights"),
+    chess.PAWN: ("pawn", "pawns"),
 }
 SLIDERS = (chess.BISHOP, chess.ROOK, chess.QUEEN)
 # A capture or threat must win at least this much material (in pawns) to be worth saying.
@@ -39,11 +32,11 @@ MIN_GAIN = 2
 
 
 def theirs(piece_type: int, square: int) -> str:
-    return f"{NAMES[piece_type]} dell'avversario in {chess.square_name(square)}"
+    return f"the opponent's {NAMES[piece_type]} on {chess.square_name(square)}"
 
 
 def yours(piece_type: int, square: int) -> str:
-    return f"{YOUR[piece_type]} in {chess.square_name(square)}"
+    return f"{YOUR[piece_type]} on {chess.square_name(square)}"
 
 
 def _after(board: chess.Board, move: chess.Move) -> chess.Board:
@@ -140,16 +133,16 @@ def move_motifs(board: chess.Board, move: chess.Move, limit: int = 7) -> list[st
 
     # What the move does immediately.
     if board.is_castling(move):
-        out.append("arrocchi")
+        out.append("you castle")
     elif board.is_capture(move):
         if board.is_en_passant(move):
-            out.append("catturi un pedone dell'avversario en passant")
+            out.append("you capture a pawn en passant")
         else:
-            out.append(f"catturi {theirs(board.piece_at(to).piece_type, to)}")
+            out.append(f"you capture {theirs(board.piece_at(to).piece_type, to)}")
     if move.promotion:
-        out.append(f"promuovi a {PLURALS[move.promotion][0]}")
+        out.append(f"you promote to a {PLURALS[move.promotion][0]}")
     if nxt.is_checkmate():
-        return out + ["dai scacco matto"]
+        return out + ["checkmate"]
 
     # Discovered attacks and checks by the pieces behind the moved one.
     discovered: list[str] = []
@@ -162,9 +155,9 @@ def move_motifs(board: chess.Board, move: chess.Move, limit: int = 7) -> list[st
         for t in new:
             target = nxt.piece_at(t)
             if target.piece_type == chess.KING:
-                discovered.append(f"dai scacco di scoperta con {yours(slider, sq)}")
+                discovered.append(f"discovered check with {yours(slider, sq)}")
             elif _worth_attacking(nxt, t, slider):
-                discovered.append(f"scopri un attacco di {yours(slider, sq)} su {theirs(target.piece_type, t)}")
+                discovered.append(f"you uncover an attack by {yours(slider, sq)} on {theirs(target.piece_type, t)}")
                 discovered_targets.append(t)
     direct_check = nxt.is_check() and to in nxt.attackers(mover, nxt.king(opp))
 
@@ -172,15 +165,15 @@ def move_motifs(board: chess.Board, move: chess.Move, limit: int = 7) -> list[st
     targets = [t for t in nxt.attacks(to) & nxt.occupied_co[opp] if _worth_attacking(nxt, t, piece.piece_type)]
     names = [theirs(nxt.piece_at(t).piece_type, t) for t in targets]
     if direct_check and not names:
-        out.append("dai scacco")
+        out.append("you give check")
     if direct_check and names:
-        out.append(f"forchetta: dai scacco e attacchi {' e '.join(names)}")
+        out.append(f"fork: you give check and attack {' and '.join(names)}")
     elif len(names) >= 2:
-        out.append(f"forchetta: attacchi {' e '.join(names)}")
+        out.append(f"fork: you attack {' and '.join(names)}")
     else:
         for t, name in zip(targets, names):
             hanging = _hanging(nxt, t)
-            out.append(f"attacchi {name} " + ("(senza difesa)" if hanging else "con un pezzo di valore minore"))
+            out.append(f"you attack {name} " + ("(undefended)" if hanging else "with a less valuable piece"))
     out.extend(discovered)
 
     # Pins to the king created by the moved piece.
@@ -188,7 +181,7 @@ def move_motifs(board: chess.Board, move: chess.Move, limit: int = 7) -> list[st
         for sq in chess.SquareSet(nxt.occupied_co[opp]):
             p = nxt.piece_at(sq)
             if p.piece_type != chess.KING and nxt.is_pinned(opp, sq) and to in nxt.pin(opp, sq):
-                out.append(f"inchiodi {theirs(p.piece_type, sq)} al Re")
+                out.append(f"you pin {theirs(p.piece_type, sq)} to the king")
 
     # New threats: what you could win next if the opponent ignored the move. Captures
     # of pieces already named as attacked above would only repeat them.
@@ -197,8 +190,8 @@ def move_motifs(board: chess.Board, move: chess.Move, limit: int = 7) -> list[st
     for m, victim, b in threats(nxt, mover):
         if m in available_before or (victim is not None and m.to_square in named):
             continue
-        what = "matto" if victim is None else f"per catturare {theirs(victim, m.to_square)}"
-        out.append(f"minacci {b.san(m)} ({what})")
+        what = "checkmate" if victim is None else f"to win {theirs(victim, m.to_square)}"
+        out.append(f"you threaten {b.san(m)} ({what})")
 
     # Safety: rescuing the moved piece, or defending another one.
     if (
@@ -207,28 +200,28 @@ def move_motifs(board: chess.Board, move: chess.Move, limit: int = 7) -> list[st
         and (_hanging(board, move.from_square) or _cheaper_attacker(board, move.from_square))
         and not _hanging(nxt, to)
     ):
-        out.append(f"metti in salvo {YOUR[piece.piece_type]}, che era sotto attacco")
+        out.append(f"you rescue {YOUR[piece.piece_type]}, which was under attack")
     for sq in chess.SquareSet(nxt.occupied_co[mover]):
         if sq != to and _hanging(board, sq) and not _hanging(nxt, sq) and sq in nxt.attacks(to):
-            out.append(f"difendi {yours(nxt.piece_at(sq).piece_type, sq)}")
+            out.append(f"you defend {yours(nxt.piece_at(sq).piece_type, sq)}")
 
     # Structure and activity.
     if piece.piece_type == chess.PAWN and _is_passed(nxt, to, mover):
-        out.append(f"il tuo pedone in {chess.square_name(to)} è passato")
+        out.append(f"your pawn on {chess.square_name(to)} is passed")
     if piece.piece_type == chess.ROOK and chess.square_file(move.from_square) != chess.square_file(to):
         file_pawns = [nxt.piece_at(chess.square(chess.square_file(to), r)) for r in range(8)]
         own = any(p and p.piece_type == chess.PAWN and p.color == mover for p in file_pawns)
         their = any(p and p.piece_type == chess.PAWN and p.color == opp for p in file_pawns)
         column = "abcdefgh"[chess.square_file(to)]
         if not own and not their:
-            out.append(f"porti la Torre sulla colonna aperta {column}")
+            out.append(f"your rook takes the open {column}-file")
         elif not own:
-            out.append(f"porti la Torre sulla colonna semiaperta {column}")
+            out.append(f"your rook takes the half-open {column}-file")
     back_rank = 0 if mover == chess.WHITE else 7
     if piece.piece_type in (chess.KNIGHT, chess.BISHOP) and chess.square_rank(move.from_square) == back_rank and board.fullmove_number <= 15:
-        out.append(f"sviluppi {YOUR[piece.piece_type]}")
+        out.append(f"you develop {YOUR[piece.piece_type]}")
     if piece.piece_type != chess.KING and _hanging(nxt, to):
-        out.append(f"{yours(piece.piece_type, to)} resta sotto attacco e senza difesa")
+        out.append(f"{yours(piece.piece_type, to)} is left attacked and undefended")
     return out[:limit]
 
 
@@ -242,9 +235,9 @@ def opponent_threats(board: chess.Board) -> list[str]:
     out = []
     for m, victim, b in threats(board, not board.turn):
         if victim is None:
-            out.append(f"l'avversario minaccia {b.san(m)} (matto)")
+            out.append(f"the opponent threatens {b.san(m)} (checkmate)")
         else:
-            out.append(f"l'avversario minaccia {b.san(m)}, che cattura {yours(victim, m.to_square)}")
+            out.append(f"the opponent threatens {b.san(m)}, winning {yours(victim, m.to_square)}")
     return out
 
 
@@ -259,4 +252,4 @@ def pieces(board: chess.Board, color: chess.Color) -> str:
         if n:
             one, many = PLURALS[pt]
             parts.append(one if n == 1 else f"{n} {many}")
-    return ", ".join(parts) or "solo il Re"
+    return ", ".join(parts) or "only the king"

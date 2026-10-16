@@ -50,7 +50,7 @@ def create_app(service: Service | None = None, default_user: str | None = None) 
         try:
             return service.list_games(user, limit, time_class or None)
         except Exception as exc:
-            raise HTTPException(502, f"Chess.com non risponde: {exc}") from exc
+            raise HTTPException(502, f"Chess.com is not responding: {exc}") from exc
 
     @app.get("/api/games/{game_id}")
     def game(game_id: str, user: str = ""):
@@ -58,13 +58,13 @@ def create_app(service: Service | None = None, default_user: str | None = None) 
         try:
             return service.game_moves(game_id, user)
         except KeyError as exc:
-            raise HTTPException(404, "Partita non trovata: ricarica l'elenco") from exc
+            raise HTTPException(404, "Game not found: reload the list") from exc
 
     @app.get("/api/reviews/{game_id}")
     def cached_review(game_id: str):
         review = service.cached_review(game_id)
         if review is None:
-            raise HTTPException(404, "Nessuna review")
+            raise HTTPException(404, "No review")
         return review
 
     @app.post("/api/reviews/{game_id}")
@@ -73,12 +73,12 @@ def create_app(service: Service | None = None, default_user: str | None = None) 
         try:
             return service.start_review(game_id, user).public()
         except KeyError as exc:
-            raise HTTPException(404, "Partita non trovata: ricarica l'elenco") from exc
+            raise HTTPException(404, "Game not found: reload the list") from exc
 
     @app.post("/api/reviews/{game_id}/narrations")
     def renarrate(game_id: str):
         if service.cached_review(game_id) is None:
-            raise HTTPException(404, "Nessuna review")
+            raise HTTPException(404, "No review")
         return service.start_renarrate(game_id).public()
 
     @app.post("/api/positions")
@@ -89,7 +89,7 @@ def create_app(service: Service | None = None, default_user: str | None = None) 
     def job(job_id: str):
         job = service.job(job_id)
         if job is None:
-            raise HTTPException(404, "Job sconosciuto")
+            raise HTTPException(404, "Unknown job")
         return job.public()
 
     return app

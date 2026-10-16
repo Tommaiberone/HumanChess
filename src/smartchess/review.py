@@ -208,7 +208,7 @@ def review_game(
         return engine.analyse(b, multipv=settings.multipv if b.turn == color else 1, depth=prepass_depth, max_time=2.0)
 
     all_lines = _parallel(engines, quick, positions, lambda n: progress(
-        f"Valuto tutte le mosse: {n}/{len(moves)}", 0.5 * n / max(1, len(moves))))
+        f"Evaluating every move: {n}/{len(moves)}", 0.5 * n / max(1, len(moves))))
     for (ply, b, move), lines in zip(positions, all_lines):
         plies.append(PlyInfo(ply, b, move, lines[0]))
         if b.turn == color:
@@ -262,7 +262,7 @@ def review_game(
         return review
 
     analysed = _parallel(engines, deep, todo, lambda n: progress(
-        f"Analizzo i momenti chiave: {n}/{len(todo)}", 0.5 + 0.4 * n / max(1, len(todo))))
+        f"Analysing the key moments: {n}/{len(todo)}", 0.5 + 0.4 * n / max(1, len(todo))))
     reviews: list[MoveReview] = []
     for review in analysed:
         a = review.analysis

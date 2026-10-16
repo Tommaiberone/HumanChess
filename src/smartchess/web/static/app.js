@@ -40,9 +40,9 @@ function staticPath(path) {
 async function api(path, opts) {
   if (STATIC) {
     const file = !opts?.method || opts.method === 'GET' ? staticPath(path) : null;
-    if (!file) throw new Error('Non disponibile nella versione condivisa');
+    if (!file) throw new Error('Not available in the shared version');
     const r = await fetch(file);
-    if (!r.ok) throw new Error(r.status === 404 || r.status === 403 ? 'Non trovato' : r.statusText);
+    if (!r.ok) throw new Error(r.status === 404 || r.status === 403 ? 'Not found' : r.statusText);
     const data = await r.json();
     if (file === '/data/games.json') {
       const tc = new URL(path, location.origin).searchParams.get('time_class');
@@ -90,28 +90,31 @@ function richText(text) {
 }
 
 const JUDGEMENTS = {
-  best: { label: 'Migliore', icon: '★' },
-  excellent: { label: 'Ottima', icon: '!' },
-  good: { label: 'Buona', icon: '✓' },
-  inaccuracy: { label: 'Imprecisione', icon: '?!' },
-  mistake: { label: 'Errore', icon: '?' },
-  blunder: { label: 'Errore grave', icon: '??' },
+  best: { label: 'Best', icon: '★' },
+  excellent: { label: 'Excellent', icon: '!' },
+  good: { label: 'Good', icon: '✓' },
+  inaccuracy: { label: 'Inaccuracy', icon: '?!' },
+  mistake: { label: 'Mistake', icon: '?' },
+  blunder: { label: 'Blunder', icon: '??' },
 };
 
 const ROLES = {
-  best: { label: 'Migliore', brush: 'best' },
-  simple: { label: 'Più semplice', brush: 'simple' },
-  tricky: { label: 'Più insidiosa', brush: 'tricky' },
+  best: { label: 'Best', brush: 'best' },
+  simple: { label: 'Simplest', brush: 'simple' },
+  tricky: { label: 'Trickiest', brush: 'tricky' },
 };
 
+// Facts written before the switch to English say "bianco"/"nero".
+const SIDES = { white: 'White', black: 'Black', bianco: 'White', nero: 'Black' };
+
 const KINDS = {
-  mistake: { icon: '✦', label: 'Errore da rivedere', short: 'errore' },
-  choice: { icon: '◆', label: 'Scelta pratica', short: 'scelta' },
+  mistake: { icon: '✦', label: 'Mistake to review', short: 'mistake' },
+  choice: { icon: '◆', label: 'Practical choice', short: 'choice' },
 };
 
 function tcLabel(tc) {
   if (!tc) return '';
-  if (tc.includes('/')) return `${Math.round(+tc.split('/')[1] / 86400)} g/mossa`;
+  if (tc.includes('/')) return `${Math.round(+tc.split('/')[1] / 86400)} d/move`;
   const [base, inc] = tc.split('+').map(Number);
   const min = base >= 60 ? `${Math.round(base / 60)}` : `${base}s`;
   return inc ? `${min}|${inc}` : `${min} min`;
@@ -120,10 +123,10 @@ function tcLabel(tc) {
 function whenLabel(ts) {
   if (!ts) return '';
   const days = Math.floor((Date.now() / 1000 - ts) / 86400);
-  if (days <= 0) return 'oggi';
-  if (days === 1) return 'ieri';
-  if (days < 7) return `${days} giorni fa`;
-  return new Date(ts * 1000).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days} days ago`;
+  return new Date(ts * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function spinner() {
@@ -189,10 +192,10 @@ async function renderHome() {
   let user = STATIC ? cfg.username : store.get('user', '') || cfg.username || '';
   let tc = store.get('tc', 'rapid');
 
-  const input = el('input', { class: 'input', value: user, placeholder: 'username Chess.com', autocomplete: 'off', 'aria-label': 'Username Chess.com' });
+  const input = el('input', { class: 'input', value: user, placeholder: 'Chess.com username', autocomplete: 'off', 'aria-label': 'Chess.com username' });
   const list = el('div', { class: 'game-list' });
   const chips = el('div', { class: 'chips' });
-  const TCS = [['rapid', 'Rapid'], ['blitz', 'Blitz'], ['bullet', 'Bullet'], ['daily', 'Daily'], ['', 'Tutte']];
+  const TCS = [['rapid', 'Rapid'], ['blitz', 'Blitz'], ['bullet', 'Bullet'], ['daily', 'Daily'], ['', 'All']];
 
   function drawChips() {
     chips.replaceChildren(...TCS.map(([v, label]) =>
@@ -205,14 +208,14 @@ async function renderHome() {
       store.set('user', user);
     }
     if (!user) {
-      list.replaceChildren(el('p', { class: 'muted' }, 'Scrivi il tuo username per vedere le partite.'));
+      list.replaceChildren(el('p', { class: 'muted' }, 'Enter your username to see your games.'));
       return;
     }
     list.replaceChildren(...[1, 2, 3, 4].map(() => el('div', { class: 'game-row skeleton' })));
     try {
       const games = await api(`/api/games?user=${encodeURIComponent(user)}&time_class=${tc}`);
       if (!games.length) {
-        list.replaceChildren(el('p', { class: 'muted' }, 'Nessuna partita trovata con questo filtro.'));
+        list.replaceChildren(el('p', { class: 'muted' }, 'No games found with this filter.'));
         return;
       }
       list.replaceChildren(...games.map(gameRow));
@@ -226,36 +229,36 @@ async function renderHome() {
 
   drawChips();
   const form = STATIC
-    ? el('h2', { class: 'list-title' }, `Le partite di ${user}`)
+    ? el('h2', { class: 'list-title' }, `${user}'s games`)
     : el('form', { class: 'user-form', onsubmit: e => { e.preventDefault(); load(); } },
-      input, el('button', { class: 'btn primary', type: 'submit' }, 'Carica'));
+      input, el('button', { class: 'btn primary', type: 'submit' }, 'Load'));
   app.replaceChildren(
     el('section', { class: 'hero' },
-      el('h1', {}, STATIC ? 'Partite di scacchi, spiegate con calma' : 'Le tue partite, spiegate con calma'),
-      el('p', { class: 'muted' }, 'Rivediamo insieme gli errori e le scelte pratiche: per ogni momento chiave ti mostro tre strade.')),
+      el('h1', {}, STATIC ? 'Chess games, explained calmly' : 'Your games, explained calmly'),
+      el('p', { class: 'muted' }, 'Mistakes and practical choices, reviewed together: at every key moment you get three options.')),
     el('section', { class: 'how-grid' },
-      how('best', 'Migliore', 'La mossa più forte secondo Stockfish.'),
-      how('simple', 'Più semplice', 'Cede al massimo 0,6 pedoni alla migliore, ma è facile da portare avanti al tuo livello.'),
-      how('tricky', 'Più insidiosa', "Cede al massimo 1 pedone, in cambio di più occasioni di errore per l'avversario.")),
+      how('best', 'Best', 'The strongest move according to Stockfish.'),
+      how('simple', 'Simplest', 'Gives up at most 0.6 pawns to the best move, but is easy to follow up at your level.'),
+      how('tricky', 'Trickiest', 'Gives up at most 1 pawn, in exchange for more chances for the opponent to go wrong.')),
     el('section', { class: 'card' }, form, chips, list),
-    STATIC ? el('p', { class: 'muted tiny showcase-note' }, 'Versione condivisa: le analisi sono state fatte in locale con Stockfish e Maia-3, le spiegazioni scritte da un LLM su quei dati.') : null,
+    STATIC ? el('p', { class: 'muted tiny showcase-note' }, 'Shared version: the games were analysed locally with Stockfish and Maia-3, and the explanations are written from that data.') : null,
   );
   load();
 }
 
 function gameRow(g) {
-  const result = { win: ['V', 'Vittoria'], loss: ['S', 'Sconfitta'], draw: ['=', 'Patta'] }[g.result];
+  const result = { win: ['W', 'Win'], loss: ['L', 'Loss'], draw: ['=', 'Draw'] }[g.result];
   const r = g.review;
   const side = r
-    ? [el('span', { class: 'tag ok' }, `precisione ${r.accuracy?.toFixed(1) ?? '–'}`),
+    ? [el('span', { class: 'tag ok' }, `accuracy ${r.accuracy?.toFixed(1) ?? '–'}`),
       el('span', { class: 'muted small' },
-        [r.mistakes ? `${KINDS.mistake.icon} ${r.mistakes}` : null, r.choices ? `${KINDS.choice.icon} ${r.choices}` : null].filter(Boolean).join('  ') || 'nessun momento critico')]
-    : [el('span', { class: 'tag' }, 'da analizzare'), el('span', { class: 'muted small' }, `tu ${g.user_rating}`)];
+        [r.mistakes ? `${KINDS.mistake.icon} ${r.mistakes}` : null, r.choices ? `${KINDS.choice.icon} ${r.choices}` : null].filter(Boolean).join('  ') || 'no critical moments')]
+    : [el('span', { class: 'tag' }, 'not reviewed'), el('span', { class: 'muted small' }, `you ${g.user_rating}`)];
   return el('a', { class: `game-row r-${g.result}`, href: `#/game/${g.id}` },
     el('span', { class: 'result-badge', title: result[1] }, result[0]),
     el('span', { class: 'game-main' },
       el('span', { class: 'game-title' },
-        el('span', { class: `piece-dot ${g.user_color}`, title: g.user_color === 'white' ? 'giocavi col Bianco' : 'giocavi col Nero' }),
+        el('span', { class: `piece-dot ${g.user_color}`, title: g.user_color === 'white' ? 'you had White' : 'you had Black' }),
         'vs ', el('b', {}, g.opponent), el('span', { class: 'muted' }, ` (${g.opponent_rating})`)),
       el('span', { class: 'game-sub muted' }, [g.opening, tcLabel(g.time_control), whenLabel(g.end_time)].filter(Boolean).join(' · '))),
     el('span', { class: 'game-side' }, ...side),
@@ -336,12 +339,12 @@ async function renderReview(id, startPly = 0) {
   });
   cleanup = () => { S.alive = false; clearInterval(S.autoplay); };
 
-  app.replaceChildren(el('div', { class: 'card loading' }, spinner(), ' Apro la partita…'));
+  app.replaceChildren(el('div', { class: 'card loading' }, spinner(), ' Opening the game…'));
   let game;
   try {
     game = await api(`/api/games/${id}?user=${encodeURIComponent(S.user)}`);
   } catch (e) {
-    app.replaceChildren(el('div', { class: 'card' }, el('p', { class: 'error' }, e.message), el('a', { class: 'btn', href: '#/' }, '← Torna alle partite')));
+    app.replaceChildren(el('div', { class: 'card' }, el('p', { class: 'error' }, e.message), el('a', { class: 'btn', href: '#/' }, '← Back to games')));
     return;
   }
   S.meta = game.summary;
@@ -355,7 +358,7 @@ async function renderReview(id, startPly = 0) {
   try {
     setReview(await api(`/api/reviews/${id}`));
   } catch {
-    if (STATIC) S.job = { status: 'error', error: 'Questa partita non è stata analizzata.' };
+    if (STATIC) S.job = { status: 'error', error: 'This game has not been reviewed.' };
     else runReviewJob();
   }
   update();
@@ -426,7 +429,7 @@ function buildLayout(app) {
   d.bottom = el('div', { class: 'player' });
   d.evalFill = el('div', { class: 'evalbar-fill' });
   d.evalLabel = el('span', { class: 'evalbar-label' });
-  d.evalbar = el('div', { class: 'evalbar', title: 'Valutazione (Stockfish)' }, d.evalFill, d.evalLabel);
+  d.evalbar = el('div', { class: 'evalbar', title: 'Evaluation (Stockfish)' }, d.evalFill, d.evalLabel);
   d.cg = el('div', { class: 'cg-host' });
   d.legend = el('div', { class: 'legend' });
   d.coach = el('div', { class: 'coach', 'aria-live': 'polite' });
@@ -435,13 +438,13 @@ function buildLayout(app) {
   d.momentChips = el('div', { class: 'moment-chips' });
   d.graph = el('div', { class: 'graph' });
   d.moves = el('div', { class: 'moves' });
-  d.sound = el('button', { class: 'icon-btn', title: 'Suono delle mosse', 'aria-label': 'Suono delle mosse', onclick: toggleSound });
+  d.sound = el('button', { class: 'icon-btn', title: 'Move sounds', 'aria-label': 'Move sounds', onclick: toggleSound });
   const tab = (key, label) => el('button', { class: 'tab', role: 'tab', onclick: () => setTab(key) }, label);
-  d.tabs = { coach: tab('coach', 'Allenatore'), moves: tab('moves', 'Mosse') };
+  d.tabs = { coach: tab('coach', 'Coach'), moves: tab('moves', 'Moves') };
   d.panes = {
     coach: el('div', { class: 'pane', role: 'tabpanel' }, d.coach),
     moves: el('div', { class: 'pane', role: 'tabpanel' }, d.counts, d.moves,
-      el('p', { class: 'muted tiny keys' }, 'Tasti: ← → mosse · N/P momenti chiave · 1/2/3 proposte · F gira · Esc torna alla partita')),
+      el('p', { class: 'muted tiny keys' }, 'Keys: ← → moves · N/P key moments · 1/2/3 options · F flip · Esc back to the game')),
   };
   d.panesBox = el('div', { class: 'panes' }, d.panes.coach, d.panes.moves);
   S.tab = store.get('tab', 'coach');
@@ -449,15 +452,15 @@ function buildLayout(app) {
   const btn = (label, title, fn, cls = 'icon-btn') => el('button', { class: cls, title, 'aria-label': title, onclick: fn }, label);
   const controls = el('div', { class: 'controls' },
     el('div', { class: 'ctrl-group' },
-      btn('⏮', 'Inizio (Home)', () => go(0)),
-      btn('◀', 'Indietro (←)', () => step(-1)),
-      btn('▶', 'Avanti (→)', () => step(1)),
-      btn('⏭', 'Fine (End)', () => go(S.plies.length))),
+      btn('⏮', 'Start (Home)', () => go(0)),
+      btn('◀', 'Back (←)', () => step(-1)),
+      btn('▶', 'Forward (→)', () => step(1)),
+      btn('⏭', 'Last move (End)', () => go(S.plies.length))),
     el('div', { class: 'ctrl-group' },
-      btn('◀ Momento', 'Momento chiave precedente (P)', () => jumpMoment(-1), 'icon-btn wide'),
-      btn('Momento ▶', 'Momento chiave successivo (N)', () => jumpMoment(1), 'icon-btn wide')),
+      btn('◀ Moment', 'Previous key moment (P)', () => jumpMoment(-1), 'icon-btn wide'),
+      btn('Moment ▶', 'Next key moment (N)', () => jumpMoment(1), 'icon-btn wide')),
     el('div', { class: 'ctrl-group' },
-      btn('⇅', 'Gira la scacchiera (F)', flip),
+      btn('⇅', 'Flip the board (F)', flip),
       d.sound));
 
   const opening = [S.meta.opening, tcLabel(S.meta.time_control), whenLabel(S.meta.end_time)].filter(Boolean).join(' · ');
@@ -472,8 +475,8 @@ function buildLayout(app) {
       el('section', { class: 'side-col card' },
         el('div', { class: 'side-head' },
           el('div', { class: 'side-top' },
-            el('a', { class: 'back', href: '#/' }, '← partite'),
-            S.meta.url ? el('a', { class: 'back', href: S.meta.url, target: '_blank', rel: 'noopener' }, 'su Chess.com ↗') : null),
+            el('a', { class: 'back', href: '#/' }, '← games'),
+            S.meta.url ? el('a', { class: 'back', href: S.meta.url, target: '_blank', rel: 'noopener' }, 'on Chess.com ↗') : null),
           el('div', { class: 'side-title' },
             el('b', {}, `${S.user} vs ${S.meta.opponent}`),
             el('span', { class: 'muted small' }, opening)),
@@ -620,7 +623,7 @@ function onBoardMove(orig, dest) {
   tock(mv.san);
   // Playing the game's own next move just walks the main line.
   if (!S.variation && S.plies[S.cur]?.uci === uci) return go(S.cur + 1, { silent: true });
-  if (!S.variation) S.variation = { base: S.cur, moves: [], idx: 0, label: 'La tua variante' };
+  if (!S.variation) S.variation = { base: S.cur, moves: [], idx: 0, label: 'Your variation' };
   const v = S.variation;
   v.moves = v.moves.slice(0, v.idx);
   v.moves.push({ uci, san: mv.san, fen: chess.fen() });
@@ -704,7 +707,7 @@ function drawShapes() {
     used.add('best');
   }
   S.cg.setAutoShapes(out);
-  const labels = { best: 'Migliore', simple: 'Più semplice', tricky: 'Più insidiosa', played: 'La tua mossa' };
+  const labels = { best: 'Best', simple: 'Simplest', tricky: 'Trickiest', played: 'Your move' };
   S.dom.legend.replaceChildren(...[...used].map(r => el('span', {}, el('i', { class: `sw ${r}` }), labels[r])));
 }
 
@@ -714,7 +717,7 @@ function updatePlayers() {
   const oppColor = userColor === 'white' ? 'black' : 'white';
   const row = (color, name, rating, you) => [
     el('span', { class: `piece-dot ${color}` }), el('b', {}, name), el('span', { class: 'muted' }, `(${rating})`),
-    you ? el('span', { class: 'tag' }, 'tu') : null,
+    you ? el('span', { class: 'tag' }, 'you') : null,
   ].filter(Boolean);
   const user = row(userColor, S.user, g.user_rating, true);
   const opp = row(oppColor, g.opponent, g.opponent_rating, false);
@@ -788,7 +791,7 @@ function buildGraph() {
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.setAttribute('preserveAspectRatio', 'none');
   svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', 'Andamento della valutazione: clicca per saltare a una mossa');
+  svg.setAttribute('aria-label', 'Evaluation over the game: click to jump to a move');
   // Key moments are drawn at the position before the user's move (x = ply).
   svg.innerHTML = `<rect class="g-black" width="${W}" height="${H}"/><path class="g-white" d="${area}"/>`
     + `<line class="g-mid" x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/>`
@@ -829,11 +832,11 @@ function updateSummary() {
   const cu = counts(userColor), co = counts(oppColor);
   S.dom.summary.replaceChildren(
     el('div', { class: 'accuracy' },
-      el('span', { class: 'acc' }, el('span', { class: 'acc-num' }, acc(userColor)), el('span', { class: 'muted small' }, 'la tua precisione')),
+      el('span', { class: 'acc' }, el('span', { class: 'acc-num' }, acc(userColor)), el('span', { class: 'muted small' }, 'your accuracy')),
       el('span', { class: 'acc' }, el('span', { class: 'acc-num soft' }, acc(oppColor)), el('span', { class: 'muted small' }, S.meta.opponent))));
   S.dom.counts.replaceChildren(
     el('div', { class: 'counts' },
-      el('div', { class: 'count-row head muted' }, el('span', { class: 'n' }, 'tu'), el('span'), el('span'), el('span', { class: 'n' }, 'avv.')),
+      el('div', { class: 'count-row head muted' }, el('span', { class: 'n' }, 'you'), el('span'), el('span'), el('span', { class: 'n' }, 'opp.')),
       ...Object.entries(JUDGEMENTS).map(([k, j]) => el('div', { class: `count-row j-${k}` },
         el('span', { class: 'n' }, cu[k] || 0),
         el('span', { class: 'j-icon' }, j.icon), el('span', { class: 'lbl' }, j.label),
@@ -844,7 +847,7 @@ function updateMomentChips() {
   const list = moments();
   if (!S.review) { S.dom.momentChips.replaceChildren(); return; }
   if (!list.length) {
-    S.dom.momentChips.replaceChildren(el('p', { class: 'muted small' }, 'Nessun momento critico: partita pulita!'));
+    S.dom.momentChips.replaceChildren(el('p', { class: 'muted small' }, 'No critical moments: a clean game!'));
     return;
   }
   const here = S.variation ? null : S.cur;
@@ -899,24 +902,24 @@ function progressBar(fraction, message) {
 function reviewProgress() {
   const job = S.job;
   if (job?.status === 'error') {
-    return [coachHead('Qualcosa è andato storto'), el('p', { class: 'error' }, job.error || 'Errore'),
-      STATIC ? el('a', { class: 'btn', href: '#/' }, '← Torna alle partite') : el('button', { class: 'btn', onclick: () => { S.job = null; runReviewJob(); } }, 'Riprova')];
+    return [coachHead('Something went wrong'), el('p', { class: 'error' }, job.error || 'Error'),
+      STATIC ? el('a', { class: 'btn', href: '#/' }, '← Back to games') : el('button', { class: 'btn', onclick: () => { S.job = null; runReviewJob(); } }, 'Retry')];
   }
-  const msg = job?.message || 'In coda';
+  const msg = job?.message || 'Queued';
   const f = job?.fraction || 0;
-  const stage = msg.startsWith('Scrivo') ? 2 : msg.startsWith('Analizzo') ? 1 : msg.startsWith('Valuto') ? 0 : -1;
-  const steps = ['Valuto tutte le mosse', 'Analizzo i momenti chiave', 'Scrivo le spiegazioni'];
-  let eta = 'Ci vogliono pochi minuti';
+  const stage = msg.startsWith('Writing') ? 2 : msg.startsWith('Analysing') ? 1 : msg.startsWith('Evaluating') ? 0 : -1;
+  const steps = ['Evaluating every move', 'Analysing the key moments', 'Writing the explanations'];
+  let eta = 'This takes a few minutes';
   if (f > 0.05 && job?.elapsed) {
     const left = (job.elapsed / f) * (1 - f);
-    eta = left > 90 ? `Ancora circa ${Math.round(left / 60)} minuti` : left > 30 ? 'Ancora un minuto o poco più' : 'Quasi fatto';
+    eta = left > 90 ? `About ${Math.round(left / 60)} minutes to go` : left > 30 ? 'A minute or so to go' : 'Almost done';
   }
   return [
-    coachHead('Sto studiando la tua partita', eta),
+    coachHead('Studying your game', eta),
     el('ol', { class: 'steps' }, ...steps.map((s, i) =>
       el('li', { class: i < stage ? 'done' : i === stage ? 'now' : '' }, el('span', { class: 'step-dot' }, i < stage ? '✓' : i + 1), s))),
     progressBar(f, msg),
-    el('p', { class: 'muted small' }, 'Intanto puoi scorrere le mosse e muovere i pezzi sulla scacchiera.'),
+    el('p', { class: 'muted small' }, 'Meanwhile you can step through the moves and move the pieces on the board.'),
   ];
 }
 
@@ -927,8 +930,8 @@ function variationBanner() {
     onclick: () => { stopAutoplay(); v.idx = i + 1; update(); },
   }, m.san));
   return el('div', { class: 'variation' },
-    el('div', { class: 'var-head' }, el('b', {}, v.label || 'Variante'),
-      el('button', { class: 'btn small', onclick: () => go(v.base, { silent: true }) }, '↩ Torna alla partita')),
+    el('div', { class: 'var-head' }, el('b', {}, v.label || 'Variation'),
+      el('button', { class: 'btn small', onclick: () => go(v.base, { silent: true }) }, '↩ Back to the game')),
     el('div', { class: 'var-moves' }, ...sans));
 }
 
@@ -937,22 +940,22 @@ function introView() {
   const nm = list.filter(p => kindOf(p) === 'mistake').length;
   const nc = list.filter(p => kindOf(p) === 'choice').length;
   const parts = [];
-  if (nm) parts.push(`${nm} ${nm === 1 ? 'errore da rivedere' : 'errori da rivedere'}`);
-  if (nc) parts.push(`${nc} ${nc === 1 ? 'scelta pratica' : 'scelte pratiche'}`);
+  if (nm) parts.push(`${nm} ${nm === 1 ? 'mistake to review' : 'mistakes to review'}`);
+  if (nc) parts.push(`${nc} ${nc === 1 ? 'practical choice' : 'practical choices'}`);
   return [
-    coachHead('Pronti a ripassare?', 'Usa ← → oppure N per il prossimo momento chiave'),
-    el('p', {}, list.length ? `Ho trovato ${parts.join(' e ')}.` : 'Nessun momento critico: partita pulita!'),
+    coachHead('Ready to review?', 'Use ← → or N for the next key moment'),
+    el('p', {}, list.length ? `I found ${parts.join(' and ')}.` : 'No critical moments: a clean game!'),
     list.length ? el('div', { class: 'moment-list' }, ...list.map(p => {
       const k = kindOf(p);
       const j = JUDGEMENTS[p.judgement];
       const c = criticalAt(p.ply);
-      const note = k === 'mistake' ? `${j?.label || ''} · serviva ${c?.facts.best.san || p.best_san}` : alternativesNote(c);
+      const note = k === 'mistake' ? `${j?.label || ''} · best was ${c?.facts.best.san || p.best_san}` : alternativesNote(c);
       return el('button', { class: `moment-row k-${k}`, onclick: () => go(p.ply, { silent: true }) },
         el('span', { class: 'moment-icon' }, KINDS[k].icon),
         el('span', { class: 'mv' }, moveLabel(p)),
         el('span', { class: 'muted small' }, note));
     })) : null,
-    list.length ? el('button', { class: 'btn primary', onclick: () => jumpMoment(1) }, 'Inizia dal primo momento ▶') : null,
+    list.length ? el('button', { class: 'btn primary', onclick: () => jumpMoment(1) }, 'Start with the first moment ▶') : null,
   ];
 }
 
@@ -960,47 +963,47 @@ function alternativesNote(c) {
   if (!c) return '';
   const f = c.facts;
   const notes = [];
-  if (!f.same?.simple_is_best) notes.push(`più semplice ${f.simple.san}`);
-  if (!f.same?.tricky_is_best) notes.push(`più insidiosa ${f.tricky.san}`);
+  if (!f.same?.simple_is_best) notes.push(`simplest ${f.simple.san}`);
+  if (!f.same?.tricky_is_best) notes.push(`trickiest ${f.tricky.san}`);
   return notes.join(' · ');
 }
 
 function moveInfo() {
-  if (S.variation) return [coachHead('Esplora', 'Muovi i pezzi per provare altre idee')];
+  if (S.variation) return [coachHead('Explore', 'Move the pieces to try other ideas')];
   const i = S.cur;
   const p = S.plies[i - 1];
   const j = JUDGEMENTS[p.judgement] || { label: '', icon: '' };
   const mine = p.color === S.meta.user_color;
-  const who = mine ? 'Hai giocato' : `${S.meta.opponent} ha giocato`;
+  const who = mine ? 'You played' : `${S.meta.opponent} played`;
   const out = [coachHead(`${who} ${moveLabel(p)}`, null),
     el('div', { class: 'verdict' },
       el('span', { class: `badge j-${p.judgement}` }, el('span', { class: 'j-icon' }, j.icon), j.label),
-      el('span', { class: 'muted small' }, `valutazione ${p.white_eval} (Bianco)`))];
+      el('span', { class: 'muted small' }, `eval ${p.white_eval} (White)`))];
   if (p.uci !== p.best_uci && ['inaccuracy', 'mistake', 'blunder'].includes(p.judgement)) {
-    out.push(el('p', {}, 'Meglio era ', el('span', { class: 'mv' }, p.best_san), '. ',
-      el('button', { class: 'link', onclick: () => { go(i - 1, { silent: true }); S.hint = p.best_uci; drawShapes(); } }, 'Mostramela')));
+    out.push(el('p', {}, 'Better was ', el('span', { class: 'mv' }, p.best_san), '. ',
+      el('button', { class: 'link', onclick: () => { go(i - 1, { silent: true }); S.hint = p.best_uci; drawShapes(); } }, 'Show me')));
   }
   if (p.critical) {
     const k = kindOf(p);
-    out.push(el('button', { class: `btn soft k-${k}`, onclick: () => { setTab('coach'); go(i - 1, { silent: true }); } }, `${KINDS[k].icon} Rivedi questo momento`));
+    out.push(el('button', { class: `btn soft k-${k}`, onclick: () => { setTab('coach'); go(i - 1, { silent: true }); } }, `${KINDS[k].icon} Review this moment`));
   }
   return out;
 }
 
 function analyseButton() {
-  if (STATIC) return el('p', { class: 'muted small' }, "Puoi provare varianti muovendo i pezzi; l'analisi dal vivo c'è solo nella versione locale.");
+  if (STATIC) return el('p', { class: 'muted small' }, 'You can try variations by moving the pieces; live analysis is only available in the local version.');
   const key = currentHistory().join(' ');
   const pj = S.posJob?.key === key ? S.posJob.job : null;
   if (pj && pj.status !== 'done' && pj.status !== 'error') {
-    return progressBar(pj.fraction || 0, pj.message || 'In coda');
+    return progressBar(pj.fraction || 0, pj.message || 'Queued');
   }
   const fen = currentFen();
-  if (new Chess(fen).isGameOver()) return el('p', { class: 'muted small' }, 'Partita finita.');
-  const side = turnOf(fen) === S.meta.user_color ? 'te' : S.meta.opponent;
+  if (new Chess(fen).isGameOver()) return el('p', { class: 'muted small' }, 'Game over.');
+  const side = turnOf(fen) === S.meta.user_color ? 'you' : S.meta.opponent;
   return el('div', { class: 'analyse' },
     pj?.status === 'error' ? el('p', { class: 'error small' }, pj.error) : null,
-    el('button', { class: 'btn soft', onclick: runPositionJob }, `Analizza questa posizione`),
-    el('span', { class: 'muted small' }, `muove ${side} · circa 15 secondi`));
+    el('button', { class: 'btn soft', onclick: runPositionJob }, `Analyse this position`),
+    el('span', { class: 'muted small' }, `to move: ${side} · about 15 seconds`));
 }
 
 function stat(label, value, title) {
@@ -1011,7 +1014,7 @@ function playedLineAction(f) {
   const line = f.played?.line?.uci;
   if (!line?.length) return null;
   const fen = currentFen();
-  return () => playLine(line, `Dopo la tua ${f.played.move}`, fen);
+  return () => playLine(line, `After your ${f.played.move}`, fen);
 }
 
 function criticalView(advice) {
@@ -1020,20 +1023,20 @@ function criticalView(advice) {
   const kind = advice.kind || 'mistake';
   const p = S.plies[S.cur];
   const j = JUDGEMENTS[p.judgement] || { label: '' };
-  const out = [coachHead(`${KINDS[kind].icon} ${KINDS[kind].label}`, `Mossa ${moveLabel(p)}`, `k-${kind}`)];
+  const out = [coachHead(`${KINDS[kind].icon} ${KINDS[kind].label}`, `Move ${moveLabel(p)}`, `k-${kind}`)];
   out.push(el('div', { class: 'compare' },
-    el('div', { class: 'cmp played' }, el('span', { class: 'muted small' }, 'hai giocato'),
+    el('div', { class: 'cmp played' }, el('span', { class: 'muted small' }, 'you played'),
       el('span', {}, el('b', { class: 'mv' }, f.played.move), ' ', el('span', { class: `badge j-${p.judgement}` }, j.label)),
-      el('span', { class: 'small' }, `${f.played.eval} per te`)),
-    el('div', { class: 'cmp best' }, el('span', { class: 'muted small' }, 'la migliore'),
-      el('b', { class: 'mv' }, f.best.move), el('span', { class: 'small' }, `${f.best.eval} per te`))));
+      el('span', { class: 'small' }, `${f.played.eval} for you`)),
+    el('div', { class: 'cmp best' }, el('span', { class: 'muted small' }, 'the best'),
+      el('b', { class: 'mv' }, f.best.move), el('span', { class: 'small' }, `${f.best.eval} for you`))));
   const roles = f.played.roles || [];
   if (kind === 'choice' && roles.length && !roles.includes('best')) {
-    out.push(el('p', { class: 'praise' }, `Bella scelta: era proprio la ${roles.map(r => ROLES[r].label.toLowerCase()).join(' e la ')}.`));
+    out.push(el('p', { class: 'praise' }, `Nice choice: that was the ${roles.map(r => ROLES[r].label.toLowerCase()).join(' and the ')} move.`));
   }
   if (n.summary) out.push(el('p', { class: 'summary-text' }, ...richText(n.summary)));
   if (f.same?.only_one_candidate) {
-    out.push(el('p', { class: 'muted small' }, "Qui c'era una sola mossa buona: niente alternative entro il margine."));
+    out.push(el('p', { class: 'muted small' }, 'There was only one good move here: no alternatives within the margin.'));
   }
   out.push(...optionsSection(advice, { playedLine: kind === 'mistake' ? playedLineAction(f) : null }));
   out.push(narrationFooter(n));
@@ -1043,9 +1046,9 @@ function criticalView(advice) {
 function optionsView(advice) {
   const f = advice.facts;
   const n = advice.narration || {};
-  const out = [coachHead('Le tue opzioni', `Muove il ${f.side} · Elo ${f.user_elo} contro ${f.opponent_elo}`)];
+  const out = [coachHead('Your options', `${SIDES[f.side] || f.side} to move · Elo ${f.user_elo} vs ${f.opponent_elo}`)];
   if (n.summary) out.push(el('p', { class: 'summary-text' }, ...richText(n.summary)));
-  if (f.same?.only_one_candidate) out.push(el('p', { class: 'muted small' }, "Qui c'è una sola mossa buona."));
+  if (f.same?.only_one_candidate) out.push(el('p', { class: 'muted small' }, 'There is only one good move here.'));
   out.push(...optionsSection(advice));
   out.push(narrationFooter(n, false));
   return out;
@@ -1053,13 +1056,13 @@ function optionsView(advice) {
 
 function narrationFooter(n, canRegenerate = !STATIC) {
   const nj = S.narrJob;
-  const source = n.source === 'template' ? 'Spiegazioni automatiche (LLM non disponibile)'
-    : n.source ? `Spiegazioni di ${n.source} sui dati di Stockfish e Maia` : '';
+  const source = n.source === 'template' ? 'Automatic explanations (LLM unavailable)'
+    : n.source ? `Explanations by ${n.source}, based on Stockfish and Maia data` : '';
   return el('div', { class: 'footnote muted tiny' },
     source,
     canRegenerate && nj && nj.status !== 'error'
-      ? el('span', {}, ' · ', spinner(), ` ${nj.message || 'riscrivo…'}`)
-      : canRegenerate ? el('button', { class: 'link tiny', onclick: runNarrationJob }, ' · riscrivi le spiegazioni') : null,
+      ? el('span', {}, ' · ', spinner(), ` ${nj.message || 'rewriting…'}`)
+      : canRegenerate ? el('button', { class: 'link tiny', onclick: runNarrationJob }, ' · rewrite the explanations') : null,
     nj?.status === 'error' ? el('span', { class: 'error' }, ` ${nj.error}`) : null);
 }
 
@@ -1123,7 +1126,7 @@ function optionsSection(advice, { playedLine = null } = {}) {
         class: `role-tab ${g.roles[0]}${i === S.sel ? ' on' : ''}`,
         role: 'tab',
         'aria-selected': String(i === S.sel),
-        title: `Tasto ${i + 1}`,
+        title: `Key ${i + 1}`,
         onclick: () => selectGroup(i),
       },
       el('span', { class: 'role-names' }, g.roles.map(r => ROLES[r].label).join(' · ')),
@@ -1140,20 +1143,20 @@ function groupCard({ c, roles }, n, playedLine) {
     el('div', { class: 'advice-head' },
       ...roles.map(r => el('span', { class: `pill ${r}` }, ROLES[r].label)),
       el('b', { class: 'mv' }, c.move),
-      el('span', { class: 'eval', title: 'Valutazione dal tuo punto di vista' }, c.eval, el('small', {}, ' per te'))),
+      el('span', { class: 'eval', title: 'Evaluation from your point of view' }, c.eval, el('small', {}, ' for you'))),
     n[primary] ? el('p', {}, ...richText(n[primary])) : null,
     ...others.map(r => (n[r] ? el('p', { class: 'secondary' }, ...richText(n[r])) : null)),
     el('div', { class: 'stats' },
-      stat('al tuo livello', c.at_your_level, 'Valutazione attesa se continui a giocare al tuo livello'),
-      stat('contro un umano', c.vs_human, 'Valutazione attesa contro un avversario reale del suo livello'),
-      stat('naturale', pct(c.naturalness), 'Quanti giocatori del tuo livello la sceglierebbero'),
-      c.opponent_error_prob > 0 ? stat('errore avv.', pct(c.opponent_error_prob), "Probabilità che l'avversario risponda con un errore") : null),
+      stat('at your level', c.at_your_level, 'Expected evaluation if you keep playing at your level'),
+      stat('vs a human', c.vs_human, 'Expected evaluation against a real opponent of their level'),
+      stat('natural', pct(c.naturalness), 'How many players at your level would choose it'),
+      c.opponent_error_prob > 0 ? stat('opp. error', pct(c.opponent_error_prob), 'Chance that the opponent replies with a mistake') : null),
     el('div', { class: 'advice-actions' },
-      el('button', { class: 'link', onclick: () => playLine(c.line.uci, `${ROLES[primary].label}: ${c.move}`) }, '▶ Guarda la linea'),
+      el('button', { class: 'link', onclick: () => playLine(c.line.uci, `${ROLES[primary].label}: ${c.move}`) }, '▶ Show the line'),
       traps?.[0]?.punishment_uci
-        ? el('button', { class: 'link', onclick: () => playLine([c.uci, traps[0].reply_uci, traps[0].punishment_uci], `Trappola: ${c.move}`) }, '⚑ Guarda la trappola')
+        ? el('button', { class: 'link', onclick: () => playLine([c.uci, traps[0].reply_uci, traps[0].punishment_uci], `Trap: ${c.move}`) }, '⚑ Show the trap')
         : null,
       playedLine && primary === 'best'
-        ? el('button', { class: 'link warn', onclick: playedLine }, '↯ Cosa succedeva dopo la tua mossa')
+        ? el('button', { class: 'link warn', onclick: playedLine }, '↯ What happened after your move')
         : null));
 }

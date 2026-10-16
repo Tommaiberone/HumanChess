@@ -65,7 +65,7 @@ def candidate_facts(board: chess.Board, c: Candidate) -> dict:
     }
 
 
-MOMENT_LABELS = {"mistake": "errore", "choice": "scelta pratica"}
+MOMENT_LABELS = {"mistake": "mistake", "choice": "practical choice"}
 
 
 def position_facts(
@@ -79,12 +79,12 @@ def position_facts(
     facts = {
         "fen": b.fen(),
         "moment": MOMENT_LABELS.get(kind),
-        "side": "bianco" if b.turn == chess.WHITE else "nero",
-        "opponent_side": "nero" if b.turn == chess.WHITE else "bianco",
+        "side": "white" if b.turn == chess.WHITE else "black",
+        "opponent_side": "black" if b.turn == chess.WHITE else "white",
         "move_number": b.fullmove_number,
         "user_elo": a.players.user_elo,
         "opponent_elo": a.players.opp_elo,
-        "eval_note": "Valutazioni dal tuo punto di vista: + vuol dire meglio per te.",
+        "eval_note": "Evaluations are from your point of view: + means better for you.",
         "material_balance": material(b, b.turn) - material(b, not b.turn),
         "your_pieces": pieces(b, b.turn),
         "opponent_pieces": pieces(b, not b.turn),
