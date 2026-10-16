@@ -9,105 +9,10 @@ from __future__ import annotations
 import chess
 
 from .explain import after, numbered, pawns
+from .motifs import material, opponent_threats, pieces
+from .motifs import move_motifs as motifs
 from .practical import Candidate, PositionAnalysis
 from .winprob import format_cp, win_pct
-
-VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 100}
-NAMES = {
-    chess.PAWN: "il pedone",
-    chess.KNIGHT: "il Cavallo",
-    chess.BISHOP: "l'Alfiere",
-    chess.ROOK: "la Torre",
-    chess.QUEEN: "la Donna",
-    chess.KING: "il Re",
-}
-YOUR = {
-    chess.PAWN: "il tuo pedone",
-    chess.KNIGHT: "il tuo Cavallo",
-    chess.BISHOP: "il tuo Alfiere",
-    chess.ROOK: "la tua Torre",
-    chess.QUEEN: "la tua Donna",
-    chess.KING: "il tuo Re",
-}
-PLURALS = {
-    chess.QUEEN: ("Donna", "Donne"),
-    chess.ROOK: ("Torre", "Torri"),
-    chess.BISHOP: ("Alfiere", "Alfieri"),
-    chess.KNIGHT: ("Cavallo", "Cavalli"),
-    chess.PAWN: ("pedone", "pedoni"),
-}
-
-
-def _theirs(piece_type: int, square: int) -> str:
-    return f"{NAMES[piece_type]} dell'avversario in {chess.square_name(square)}"
-
-
-def motifs(board: chess.Board, move: chess.Move) -> list[str]:
-    """Observable facts about a move of the user, in Italian and in the second person.
-
-    Ownership is always explicit ("il tuo Alfiere", "la Torre dell'avversario"):
-    without it LLMs regularly mix up whose piece is attacked.
-    """
-    out = []
-    mover = board.turn
-    piece = board.piece_at(move.from_square)
-    if piece is None:
-        return out
-    if board.is_castling(move):
-        out.append("arrocchi")
-    elif board.is_capture(move):
-        if board.is_en_passant(move):
-            out.append("catturi un pedone dell'avversario en passant")
-        else:
-            out.append(f"catturi {_theirs(board.piece_at(move.to_square).piece_type, move.to_square)}")
-    if move.promotion:
-        out.append(f"promuovi a {PLURALS[move.promotion][0]}")
-
-    nxt = after(board, move)
-    if nxt.is_checkmate():
-        out.append("dai scacco matto")
-    elif nxt.is_check():
-        out.append("dai scacco")
-
-    for sq in nxt.attacks(move.to_square) & nxt.occupied_co[not mover]:
-        target = nxt.piece_at(sq)
-        if target.piece_type == chess.KING:
-            continue
-        if not nxt.is_attacked_by(not mover, sq):
-            out.append(f"attacchi {_theirs(target.piece_type, sq)} (senza difesa)")
-        elif VALUES[target.piece_type] > VALUES[piece.piece_type]:
-            out.append(f"attacchi {_theirs(target.piece_type, sq)} con un pezzo di valore minore")
-
-    back_rank = 0 if mover == chess.WHITE else 7
-    if (
-        piece.piece_type in (chess.KNIGHT, chess.BISHOP)
-        and chess.square_rank(move.from_square) == back_rank
-        and board.fullmove_number <= 15
-    ):
-        out.append(f"sviluppi {YOUR[piece.piece_type]}")
-
-    if (
-        piece.piece_type != chess.KING
-        and nxt.is_attacked_by(not mover, move.to_square)
-        and not nxt.is_attacked_by(mover, move.to_square)
-    ):
-        out.append(f"{YOUR[piece.piece_type]} in {chess.square_name(move.to_square)} resta sotto attacco e senza difesa")
-    return out
-
-
-def material(board: chess.Board, color: chess.Color) -> int:
-    return sum(VALUES[p.piece_type] for p in board.piece_map().values() if p.color == color and p.piece_type != chess.KING)
-
-
-def pieces(board: chess.Board, color: chess.Color) -> str:
-    parts = []
-    for pt in (chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT, chess.PAWN):
-        n = len(board.pieces(pt, color))
-        if n:
-            one, many = PLURALS[pt]
-            parts.append(one if n == 1 else f"{n} {many}")
-    return ", ".join(parts) or "solo il Re"
-
 
 def _line(board: chess.Board, moves) -> dict:
     moves = list(moves)
@@ -183,6 +88,7 @@ def position_facts(
         "material_balance": material(b, b.turn) - material(b, not b.turn),
         "your_pieces": pieces(b, b.turn),
         "opponent_pieces": pieces(b, not b.turn),
+        "opponent_threats": opponent_threats(b),
         "best": candidate_facts(b, a.best),
         "simple": candidate_facts(b, a.simplest),
         "tricky": candidate_facts(b, a.trickiest),

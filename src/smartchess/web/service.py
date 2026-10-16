@@ -49,7 +49,8 @@ class Job:
 class Service:
     data_dir: Path = PROJECT_ROOT / "data"
     model: str = "maia3-23m"
-    threads: int = 8
+    threads: int = 12  # Stockfish threads in total, split across the workers
+    workers: int = 3  # Stockfish instances analysing positions in parallel
     depth: int = 12
     settings: Settings = field(default_factory=Settings)
 
@@ -59,25 +60,26 @@ class Service:
         self._review_jobs: dict[str, str] = {}  # game id -> job id
         self._games: dict[str, dict] = {}  # game id -> raw Chess.com game
         self._lock = threading.Lock()
-        self._engine: Stockfish | None = None
+        self._pool: list[Stockfish] = []
         self._human = None
         (self.data_dir / "reviews").mkdir(parents=True, exist_ok=True)
         (self.data_dir / "games").mkdir(parents=True, exist_ok=True)
 
     # -- engines --------------------------------------------------------------
 
-    def _engines(self):
-        if self._engine is None:
+    def _engines(self) -> tuple[list[Stockfish], object]:
+        if not self._pool:
             from ..human import Maia3
 
-            self._engine = Stockfish(threads=self.threads, depth=self.depth)
+            per_engine = max(1, self.threads // self.workers)
+            self._pool = [Stockfish(threads=per_engine, hash_mb=256, depth=self.depth) for _ in range(self.workers)]
             self._human = Maia3(self.model)
-        return self._engine, self._human
+        return self._pool, self._human
 
     def close(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=True)
-        if self._engine is not None:
-            self._engine.close()
+        for engine in self._pool:
+            engine.close()
 
     # -- games ----------------------------------------------------------------
 
@@ -159,7 +161,7 @@ class Service:
         return job
 
     def _do_review(self, job: Job, raw: dict, game_id: str, username: str) -> dict:
-        engine, human = self._engines()
+        engines, human = self._engines()
         game = parse_pgn(raw["pgn"])
         summary = chesscom_summary(raw, username)
         color = chess.WHITE if summary["user_color"] == "white" else chess.BLACK
@@ -168,7 +170,7 @@ class Service:
         def progress(msg: str, fraction: float) -> None:
             job.message, job.fraction = msg, fraction
 
-        review = review_game(game, engine, human, self.settings, players, progress=progress)
+        review = review_game(game, engines, human, self.settings, players, progress=progress)
         narrations = {}
         analysed = [mr for mr in review.moves if mr.analysis is not None]
         for i, mr in enumerate(analysed, start=1):
@@ -213,7 +215,8 @@ class Service:
         return job
 
     def _do_position(self, job: Job, start_fen: str, moves: list[str], user_elo: int, opp_elo: int) -> dict:
-        engine, human = self._engines()
+        engines, human = self._engines()
+        engine = engines[0]
         board = chess.Board(start_fen)
         for uci in moves:
             board.push_uci(uci)

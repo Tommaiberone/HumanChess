@@ -23,12 +23,13 @@ Utente: 1400 rapid su Chess.com, che corrispondono a circa 1700 sulla scala Maia
   - confrontare i risultati con profondità e parametri diversi.
 - [x] **3. Spiegazioni con LLM** (Groq): i fatti e le bozze dei template vanno all'LLM, le mosse citate vengono verificate e il template resta come fallback.
   - [ ] Chat ("perché non Cxe5?") con l'LLM che interroga i motori tramite tool.
-- [~] **4. Riconoscimento dei temi**. Fatto: catture, scacchi, attacchi a pezzi indifesi o di valore maggiore, sviluppo, pezzo mosso in presa. Da fare: forchette, inchiodature, struttura pedonale.
+- [x] **4. Riconoscimento dei temi** (`motifs.py`): forchette, inchiodature, attacchi e scacchi di scoperta, minacce (anche di matto), pezzi messi in salvo o difesi, pedoni passati, colonne aperte, minacce dell'avversario.
 - [x] **5. Web app locale** "cozy" in stile Chess.com: elenco partite, review con barra di valutazione, grafico, precisione, icone delle mosse, momenti chiave con tre proposte, varianti e analisi di qualsiasi posizione.
   - [ ] Import da Lichess e aperture dal Lichess Opening Explorer.
   - [ ] Opzionale: Lambda AWS per analizzare in parallelo le posizioni critiche.
   - [x] Versione vetrina statica su S3 + CloudFront (`scripts/deploy.sh`): https://d10viis4vhdzq8.cloudfront.net/
-- [ ] **6. Prestazioni**: inferenza Maia a batch per nodo, prima passata più leggera, analisi in parallelo.
+- [x] **6. Prestazioni**: pool di 3 Stockfish in parallelo (review circa 2,3 volte più veloce: 309 s → 132 s).
+  - [ ] Inferenza Maia a batch per nodo.
 
 ## Parametri da rivedere
 - Margini: 0,6 pedoni per la più semplice (`--margin 60`) e 1 pedone per la più insidiosa (`--tricky-margin 100`). Misurati su 16 posizioni: allargare il margine aiuta solo l'insidiosa.

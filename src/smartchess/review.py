@@ -8,7 +8,10 @@ to find for a human at the user's level while alternatives exist.
 from __future__ import annotations
 
 import math
+import queue
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -131,9 +134,44 @@ def _stderr(msg: str, fraction: float = 0.0) -> None:
     print(msg, file=sys.stderr, flush=True)
 
 
+def _parallel(engines: list[Stockfish], fn, items: list, on_done: Callable[[int], None]) -> list:
+    """fn(engine, item) for every item, each call borrowing one engine from the pool.
+
+    Results keep the order of `items`; `on_done(n)` reports completions.
+    """
+    if len(engines) == 1:
+        out = []
+        for i, item in enumerate(items):
+            out.append(fn(engines[0], item))
+            on_done(i + 1)
+        return out
+    free: queue.Queue = queue.Queue()
+    for e in engines:
+        free.put(e)
+
+    def run(item):
+        engine = free.get()
+        try:
+            return fn(engine, item)
+        finally:
+            free.put(engine)
+
+    results: list = [None] * len(items)
+    lock = threading.Lock()
+    done = 0
+    with ThreadPoolExecutor(max_workers=len(engines)) as pool:
+        futures = {pool.submit(run, item): i for i, item in enumerate(items)}
+        for future in as_completed(futures):
+            results[futures[future]] = future.result()
+            with lock:
+                done += 1
+                on_done(done)
+    return results
+
+
 def review_game(
     game: chess.pgn.Game,
-    engine: Stockfish,
+    engine: Stockfish | list[Stockfish],
     human: HumanModel,
     settings: Settings,
     players: Players,
@@ -151,6 +189,7 @@ def review_game(
     best one is hard to find for a human: that is where "simple" and "tricky"
     have something to say, and we keep only those where they actually differ.
     """
+    engines = engine if isinstance(engine, list) else [engine]
     color = players.user
     threshold = margin_win(max(settings.margin_cp, settings.tricky_margin_cp))
     moves = list(game.mainline_moves())
@@ -159,15 +198,22 @@ def review_game(
     candidate_lines: dict[int, list[LineEval]] = {}
 
     # Pass 1: every position, so that each move gets an eval and a judgement.
+    positions = []
     for ply, move in enumerate(moves):
-        progress(f"Valuto tutte le mosse: {ply + 1}/{len(moves)}", 0.5 * ply / max(1, len(moves)))
-        is_user = board.turn == color
-        lines = engine.analyse(board, multipv=settings.multipv if is_user else 1, depth=prepass_depth, max_time=2.0)
-        plies.append(PlyInfo(ply, board.copy(), move, lines[0]))
-        if is_user:
-            candidate_lines[ply] = lines
+        positions.append((ply, board.copy(), move))
         board.push(move)
-    final_cp = _final_cp(board, engine, prepass_depth)
+
+    def quick(engine: Stockfish, item):
+        ply, b, _ = item
+        return engine.analyse(b, multipv=settings.multipv if b.turn == color else 1, depth=prepass_depth, max_time=2.0)
+
+    all_lines = _parallel(engines, quick, positions, lambda n: progress(
+        f"Valuto tutte le mosse: {n}/{len(moves)}", 0.5 * n / max(1, len(moves))))
+    for (ply, b, move), lines in zip(positions, all_lines):
+        plies.append(PlyInfo(ply, b, move, lines[0]))
+        if b.turn == color:
+            candidate_lines[ply] = lines
+    final_cp = _final_cp(board, engines[0], prepass_depth)
     for i, info in enumerate(plies):
         # The eval after a move is the next position's eval, seen from the mover.
         info.cp_after = -(plies[i + 1].best.cp if i + 1 < len(plies) else final_cp)
@@ -200,15 +246,12 @@ def review_game(
     mistakes = sorted(mistakes, key=lambda i: i.loss, reverse=True)[:max_mistakes]
     pool_infos = [info for _, info in sorted(pool, key=lambda x: x[0], reverse=True)[:choice_pool]]
 
-    searcher = Searcher(engine, human, players, settings)
     todo = [(info, "mistake") for info in mistakes] + [(info, "choice") for info in pool_infos]
-    reviews: list[MoveReview] = []
-    for i, (info, kind) in enumerate(todo, start=1):
-        label = "errore" if kind == "mistake" else "scelta pratica"
-        progress(f"Analizzo i momenti chiave: {i}/{len(todo)} (mossa {info.board.fullmove_number}, {label})",
-                 0.5 + 0.4 * (i - 1) / len(todo))
+
+    def deep(engine: Stockfish, item) -> MoveReview:
+        info, kind = item
         review = MoveReview(info.ply, info.board, info.move, info.cp_after, info.best.cp, kind=kind)
-        review.analysis = a = searcher.analyse(info.board)
+        review.analysis = a = Searcher(engine, human, players, settings).analyse(info.board)
         # Report the deeper evals so the header matches the advice below it.
         review.best_cp = a.best.line.cp
         played = next((c.line for c in a.candidates if c.move == review.played), None)
@@ -216,7 +259,14 @@ def review_game(
             played = engine.analyse(info.board, moves=[review.played], depth=settings.root_depth, max_time=settings.root_time)[0]
         review.played_cp = played.cp
         review.played_line = played
-        if kind == "choice":
+        return review
+
+    analysed = _parallel(engines, deep, todo, lambda n: progress(
+        f"Analizzo i momenti chiave: {n}/{len(todo)}", 0.5 + 0.4 * n / max(1, len(todo))))
+    reviews: list[MoveReview] = []
+    for review in analysed:
+        a = review.analysis
+        if review.kind == "choice":
             review.gain = max(a.simplest.simple - a.best.simple, a.trickiest.tricky - a.best.tricky)
             differs = a.simplest.move != a.best.move or a.trickiest.move != a.best.move
             if not differs or review.gain < CHOICE_GAIN:

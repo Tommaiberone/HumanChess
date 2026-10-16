@@ -44,7 +44,8 @@ Ricevi i FATTI di una posizione, calcolati da Stockfish (motore) e da Maia (mode
 - "tricky": la mossa, entro un margine più largo (fino a circa 1 pedone), che rende di più contro un avversario umano reale \
 ("traps" = risposte sbagliate probabili, con la probabilità "prob", la punizione e la probabilità di trovarla);
 - "critical_moment": il punto dove al giocatore servirà una mossa difficile ("find_prob" = probabilità di trovarla);
-- "motifs": fatti osservabili sulla mossa (catture, scacchi, attacchi).
+- "motifs": temi della mossa (catture, scacchi, forchette, inchiodature, attacchi di scoperta, minacce, pezzi messi in salvo o difesi, pedoni passati, colonne aperte);
+- "opponent_threats": cosa minaccia l'avversario prima della mossa: spiega perché la mossa giusta serve.
 
 Il giocatore ha i pezzi "side", l'avversario i pezzi "opponent_side": non confonderli mai. I "motifs" descrivono cosa fa ciascuna mossa del giocatore.
 Ricevi anche le BOZZE: frasi già corrette, generate dai fatti. Riscrivile in modo più caldo e naturale \

@@ -30,7 +30,8 @@ def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--margin", type=float, default=60, help="centipawns the simple move may give up (balanced position)")
     p.add_argument("--tricky-margin", type=float, default=100, help="centipawns the tricky move may give up")
     p.add_argument("--model", default="maia3-23m", help="Maia-3 model (maia3-5m, maia3-23m, maia3-79m)")
-    p.add_argument("--threads", type=int, default=8, help="Stockfish threads")
+    p.add_argument("--threads", type=int, default=12, help="Stockfish threads in total")
+    p.add_argument("--workers", type=int, default=3, help="Stockfish instances analysing in parallel")
     p.add_argument("--depth", type=int, default=12, help="Stockfish depth inside the practical search")
     p.add_argument("--root-depth", type=int, default=18, help="Stockfish depth for candidate moves")
     p.add_argument("--llm", action="store_true", help="explain with Groq instead of templates")
@@ -60,7 +61,8 @@ def _settings(args) -> Settings:
 def _engines(args):
     from .human import Maia3  # imports torch, so keep it out of --help
 
-    return Stockfish(threads=args.threads, depth=args.depth), Maia3(args.model)
+    per_engine = max(1, args.threads // args.workers)
+    return [Stockfish(threads=per_engine, hash_mb=256, depth=args.depth) for _ in range(args.workers)], Maia3(args.model)
 
 
 def cmd_position(args) -> int:
@@ -72,9 +74,12 @@ def cmd_position(args) -> int:
             board.push_san(san)
     user_elo = args.elo or DEFAULT_ELO
     players = Players(board.turn, user_elo, args.opp_elo or user_elo)
-    engine, human = _engines(args)
-    with engine:
-        analysis = Searcher(engine, human, players, _settings(args)).analyse(board)
+    engines, human = _engines(args)
+    try:
+        analysis = Searcher(engines[0], human, players, _settings(args)).analyse(board)
+    finally:
+        for e in engines:
+            e.close()
     header = f"Posizione: {board.fen()}  (Elo Maia: tu {players.user_elo}, avversario {players.opp_elo})"
     _print_analysis(analysis, header, use_llm=args.llm)
     return 0
@@ -95,8 +100,8 @@ def cmd_review(args) -> int:
         print("Nessuna partita trovata.", file=sys.stderr)
         return 1
 
-    engine, human = _engines(args)
-    with engine:
+    engines, human = _engines(args)
+    try:
         for game in games:
             color = {"white": chess.WHITE, "black": chess.BLACK}.get(args.color) if args.color else None
             color = color if color is not None else detect_user_color(game, username)
@@ -107,7 +112,7 @@ def cmd_review(args) -> int:
             h = game.headers
             print(f"\n=== {h.get('White')} ({h.get('WhiteElo', '?')}) – {h.get('Black')} ({h.get('BlackElo', '?')})"
                   f"  {h.get('Result', '')}  {h.get('Link', '')}")
-            review = review_game(game, engine, human, _settings(args), players, max_mistakes=args.max_mistakes,
+            review = review_game(game, engines, human, _settings(args), players, max_mistakes=args.max_mistakes,
                                  max_choices=args.max_choices, skip_plies=args.skip_plies)
             for mr in review.moves:
                 kind = "ERRORE" if mr.kind == "mistake" else "SCELTA PRATICA"
@@ -118,6 +123,9 @@ def cmd_review(args) -> int:
                 name = _safe_name(f"{h.get('Date', '')}_{h.get('White', '')}-{h.get('Black', '')}")
                 path = write_report(review, Path(args.out) / f"{name}.html")
                 print(f"\nReport: {path.resolve()}")
+    finally:
+        for e in engines:
+            e.close()
     return 0
 
 
@@ -191,7 +199,7 @@ def cmd_web(args) -> int:
     from .web.app import create_app
     from .web.service import Service
 
-    service = Service(model=args.model, threads=args.threads, depth=args.depth, settings=_settings(args))
+    service = Service(model=args.model, threads=args.threads, workers=args.workers, depth=args.depth, settings=_settings(args))
     app = create_app(service, default_user=args.user)
     url = f"http://127.0.0.1:{args.port}/"
     if not args.no_browser:
