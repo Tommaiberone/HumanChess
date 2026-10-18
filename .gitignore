@@ -19,7 +19,7 @@ data/
 
 # Static export and Terraform working files
 site/
-infra/.terraform/
+.terraform/
 *.tfstate
 *.tfstate.backup
 *.log

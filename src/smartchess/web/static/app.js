@@ -51,9 +51,11 @@ async function api(path, opts) {
     return data;
   }
   const r = await fetch(path, opts);
+  // The session ended (password changed or cookie gone): back to the sign-in page.
+  if (r.status === 401) location.href = '/login';
   if (!r.ok) {
     const body = await r.json().catch(() => ({}));
-    throw new Error(body.detail || r.statusText);
+    throw Object.assign(new Error(body.detail || r.statusText), { status: r.status });
   }
   return r.json();
 }
@@ -89,14 +91,37 @@ function richText(text) {
   return out;
 }
 
+// Move classifications. At key moments a move that is one of the three options
+// is judged "simple" or "tricky" by the backend, never as an inaccuracy.
 const JUDGEMENTS = {
-  best: { label: 'Best', icon: '★' },
-  excellent: { label: 'Excellent', icon: '!' },
-  good: { label: 'Good', icon: '✓' },
-  inaccuracy: { label: 'Inaccuracy', icon: '?!' },
-  mistake: { label: 'Mistake', icon: '?' },
-  blunder: { label: 'Blunder', icon: '??' },
+  best: { label: 'Best', phrase: 'is the best move' },
+  simple: { label: 'Simplest', phrase: 'is the simplest move' },
+  tricky: { label: 'Trickiest', phrase: 'is the trickiest move' },
+  excellent: { label: 'Excellent', phrase: 'is excellent' },
+  good: { label: 'Good', phrase: 'is good' },
+  inaccuracy: { label: 'Inaccuracy', phrase: 'is an inaccuracy' },
+  mistake: { label: 'Mistake', phrase: 'is a mistake' },
+  blunder: { label: 'Blunder', phrase: 'is a blunder' },
 };
+
+// Chess.com-style badges: a colored disc with a white glyph (star, shield for the
+// simplest move, bolt for the trickiest, check, or punctuation).
+const GLYPHS = {
+  best: '<path d="M10 3.8l1.53 4.1 4.37.18-3.43 2.72 1.17 4.22L10 12.6l-3.64 2.42 1.17-4.22-3.43-2.72 4.37-.18z"/>',
+  simple: '<path d="M10 3.7l5.3 2v4c0 3.3-2.2 5.6-5.3 6.6-3.1-1-5.3-3.3-5.3-6.6v-4z"/>',
+  tricky: '<path d="M11.4 3.4L5.6 11.1h3.7l-1 5.5 6.1-7.9h-3.9z"/>',
+  good: '<path class="stroke" d="M5.7 10.3l2.9 2.9 5.7-6.2"/>',
+};
+const MARKS = { excellent: '!', inaccuracy: '?!', mistake: '?', blunder: '??' };
+
+function jIcon(key, cls = '') {
+  const e = el('span', { class: `j-icon j-${key} ${cls}`, title: JUDGEMENTS[key]?.label });
+  const mark = MARKS[key];
+  const glyph = GLYPHS[key]
+    || `<text x="10" y="${mark.length > 1 ? 13.6 : 14.4}" font-size="${mark.length > 1 ? 9.5 : 12.5}">${mark}</text>`;
+  e.innerHTML = `<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="10"/>${glyph}</svg>`;
+  return e;
+}
 
 const ROLES = {
   best: { label: 'Best', brush: 'best' },
@@ -356,12 +381,16 @@ async function renderReview(id, startPly = 0) {
   S.cur = Math.min(startPly, S.plies.length);
   buildLayout(app);
 
+  // Only a game without a review starts one: any other failure is shown as is.
+  let review = null;
   try {
-    setReview(await api(`/api/reviews/${id}`));
-  } catch {
+    review = await api(`/api/reviews/${id}`);
+  } catch (e) {
     if (STATIC) S.job = { status: 'error', error: 'This game has not been reviewed.' };
-    else runReviewJob();
+    else if (e.status === 404) runReviewJob();
+    else S.job = { status: 'error', error: e.message };
   }
+  if (review) setReview(review);
   update();
 }
 
@@ -432,11 +461,11 @@ function buildLayout(app) {
   d.evalLabel = el('span', { class: 'evalbar-label' });
   d.evalbar = el('div', { class: 'evalbar', title: 'Evaluation (Stockfish)' }, d.evalFill, d.evalLabel);
   d.cg = el('div', { class: 'cg-host' });
+  // Outside .board, whose overflow is hidden: a badge may stick out past the edge.
+  d.badges = el('div', { class: 'board-badges', 'aria-hidden': 'true' });
   d.legend = el('div', { class: 'legend' });
   d.coach = el('div', { class: 'coach', 'aria-live': 'polite' });
   d.summary = el('div', { class: 'summary' });
-  d.counts = el('div', { class: 'counts-wrap' });
-  d.momentChips = el('div', { class: 'moment-chips' });
   d.graph = el('div', { class: 'graph' });
   d.moves = el('div', { class: 'moves' });
   d.sound = el('button', { class: 'icon-btn', title: 'Move sounds', 'aria-label': 'Move sounds', onclick: toggleSound });
@@ -444,7 +473,7 @@ function buildLayout(app) {
   d.tabs = { coach: tab('coach', 'Coach'), moves: tab('moves', 'Moves') };
   d.panes = {
     coach: el('div', { class: 'pane', role: 'tabpanel' }, d.coach),
-    moves: el('div', { class: 'pane', role: 'tabpanel' }, d.counts, d.moves,
+    moves: el('div', { class: 'pane', role: 'tabpanel' }, d.moves,
       el('p', { class: 'muted tiny keys' }, 'Keys: ← → moves · N/P key moments · 1/2/3 options · F flip · Esc back to the game')),
   };
   d.panesBox = el('div', { class: 'panes' }, d.panes.coach, d.panes.moves);
@@ -469,7 +498,8 @@ function buildLayout(app) {
     el('div', { class: 'review' },
       el('section', { class: 'board-col' },
         d.top,
-        el('div', { class: 'board-wrap' }, d.evalbar, el('div', { class: 'board' }, d.cg)),
+        el('div', { class: 'board-wrap' }, d.evalbar,
+          el('div', { class: 'board-frame' }, el('div', { class: 'board' }, d.cg), d.badges)),
         d.bottom,
         controls,
         d.legend),
@@ -483,8 +513,7 @@ function buildLayout(app) {
             el('b', {}, `${S.user} vs ${S.meta.opponent}`),
             el('span', { class: 'muted small' }, opening)),
           d.summary,
-          d.graph,
-          d.momentChips),
+          d.graph),
         el('div', { class: 'tabs', role: 'tablist' }, d.tabs.coach, d.tabs.moves),
         d.panesBox)),
   );
@@ -677,12 +706,12 @@ function update() {
     movable: { color: turn, dests: dests(fen) },
   });
   drawShapes();
+  updateMoveBadge();
   updatePlayers();
   updateEvalbar();
   updateMoveList();
   updateGraph();
   updateSummary();
-  updateMomentChips();
   updateCoach();
 }
 
@@ -711,6 +740,27 @@ function drawShapes() {
   S.cg.setAutoShapes(out);
   const labels = { best: 'Best', simple: 'Simplest', tricky: 'Trickiest', played: 'Your move' };
   S.dom.legend.replaceChildren(...[...used].map(r => el('span', {}, el('i', { class: `sw ${r}` }), labels[r])));
+}
+
+// The class of the move that led to the position, on its destination square, as on
+// chess.com. Variations carry no classes, so they show none.
+function updateMoveBadge() {
+  const i = S.variation ? 0 : S.cur;
+  const p = S.review && i > 0 ? S.plies[i - 1] : null;
+  if (!p || !JUDGEMENTS[p.judgement]) {
+    S.dom.badges.replaceChildren();
+    return;
+  }
+  const file = p.uci.charCodeAt(2) - 97;
+  const rank = Number(p.uci[3]) - 1;
+  const white = S.orientation === 'white';
+  const col = white ? file : 7 - file;
+  const row = white ? 7 - rank : rank;
+  const badge = jIcon(p.judgement, 'on-board');
+  // Top-right corner of the square, sticking out a little as on chess.com.
+  badge.style.left = `${(col + 0.66) * 12.5}%`;
+  badge.style.top = `${(row - 0.1) * 12.5}%`;
+  S.dom.badges.replaceChildren(badge);
 }
 
 function updatePlayers() {
@@ -756,15 +806,14 @@ function buildMoveList() {
 
 function moveCell(p) {
   const j = p.judgement && JUDGEMENTS[p.judgement];
-  const showIcon = j && ['best', 'inaccuracy', 'mistake', 'blunder'].includes(p.judgement);
   const kind = kindOf(p);
   const cell = el('button', {
     class: `move j-${p.judgement || 'none'}${kind ? ` critical k-${kind}` : ''}`,
     title: j ? j.label : null,
     onclick: () => go(p.ply + 1, { silent: true }),
   },
+  j ? jIcon(p.judgement, 'sm') : null,
   el('span', { class: 'san' }, p.san),
-  showIcon ? el('span', { class: 'j-icon' }, j.icon) : null,
   kind ? el('span', { class: 'crit', title: KINDS[kind].label }, KINDS[kind].icon) : null);
   S.moveEls[p.ply] = cell;
   return cell;
@@ -802,7 +851,6 @@ function buildGraph() {
       return `<circle class="g-crit k-${kindOf(p)}" cx="${(p.ply / n) * W}" cy="${y(prev)}" r="4.5"/>`;
     }).join('')
     + `<line class="g-cursor" x1="0" y1="0" x2="0" y2="${H}"/>`;
-  S.dom.graphCard.hidden = false;
   svg.addEventListener('click', e => {
     const r = svg.getBoundingClientRect();
     go(Math.round(((e.clientX - r.left) / r.width) * n), { silent: true });
@@ -821,52 +869,36 @@ function updateGraph() {
 
 function updateSummary() {
   const r = S.review;
-  if (!r) { S.dom.summary.replaceChildren(); S.dom.counts.replaceChildren(); return; }
+  if (!r) { S.dom.summary.replaceChildren(); return; }
   if (S.dom.summary.childElementCount) return;
   const userColor = r.game.user_color;
   const oppColor = userColor === 'white' ? 'black' : 'white';
   const acc = c => (r.accuracy[c] == null ? '–' : r.accuracy[c].toFixed(1));
-  const counts = color => {
+  S.dom.summary.replaceChildren(
+    el('div', { class: 'accuracy', title: 'Accuracy (Lichess formula)' },
+      el('span', { class: 'acc' }, el('span', { class: 'acc-num' }, acc(userColor)), el('span', { class: 'muted small' }, 'you')),
+      el('span', { class: 'acc' }, el('span', { class: 'acc-num soft' }, acc(oppColor)), el('span', { class: 'muted small' }, S.meta.opponent))));
+}
+
+// How many moves of each class both players made; the simple and tricky rows only
+// show up when the user played such a move.
+function qualityTable() {
+  const r = S.review;
+  const userColor = r.game.user_color;
+  const counts = mine => {
     const c = {};
-    for (const p of r.plies) if (p.color === color) c[p.judgement] = (c[p.judgement] || 0) + 1;
+    for (const p of r.plies) if ((p.color === userColor) === mine) c[p.judgement] = (c[p.judgement] || 0) + 1;
     return c;
   };
-  const cu = counts(userColor), co = counts(oppColor);
-  S.dom.summary.replaceChildren(
-    el('div', { class: 'accuracy' },
-      el('span', { class: 'acc' }, el('span', { class: 'acc-num' }, acc(userColor)), el('span', { class: 'muted small' }, 'your accuracy')),
-      el('span', { class: 'acc' }, el('span', { class: 'acc-num soft' }, acc(oppColor)), el('span', { class: 'muted small' }, S.meta.opponent))));
-  S.dom.counts.replaceChildren(
-    el('div', { class: 'counts' },
-      el('div', { class: 'count-row head muted' }, el('span', { class: 'n' }, 'you'), el('span'), el('span'), el('span', { class: 'n' }, 'opp.')),
-      ...Object.entries(JUDGEMENTS).map(([k, j]) => el('div', { class: `count-row j-${k}` },
-        el('span', { class: 'n' }, cu[k] || 0),
-        el('span', { class: 'j-icon' }, j.icon), el('span', { class: 'lbl' }, j.label),
-        el('span', { class: 'n soft' }, co[k] || 0)))));
+  const cu = counts(true), co = counts(false);
+  const keys = Object.keys(JUDGEMENTS).filter(k => !['simple', 'tricky'].includes(k) || cu[k]);
+  return el('div', { class: 'quality' },
+    el('div', { class: 'q-row head muted' }, el('span', {}, 'Move quality'), el('span', { class: 'n' }, 'you'), el('span', { class: 'n' }, 'opp.')),
+    ...keys.map(k => el('div', { class: 'q-row' },
+      el('span', { class: 'q-label' }, jIcon(k, 'sm'), JUDGEMENTS[k].label),
+      el('span', { class: 'n' }, cu[k] || 0),
+      el('span', { class: 'n soft' }, co[k] || 0))));
 }
-
-function updateMomentChips() {
-  const list = moments();
-  if (!S.review) { S.dom.momentChips.replaceChildren(); return; }
-  if (!list.length) {
-    S.dom.momentChips.replaceChildren(el('p', { class: 'muted small' }, 'No critical moments: a clean game!'));
-    return;
-  }
-  const here = S.variation ? null : S.cur;
-  S.dom.momentChips.replaceChildren(
-    el('div', { class: 'chips scroll' }, ...list.map(p => {
-      const k = kindOf(p);
-      return el('button', {
-        class: `chip moment k-${k}${here === p.ply ? ' on' : ''}`,
-        title: KINDS[k].label,
-        onclick: () => { setTab('coach'); go(p.ply, { silent: true }); },
-      }, `${KINDS[k].icon} ${moveLabel(p)}`);
-    })));
-  S.dom.momentChips.querySelector('.chip.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-}
-
-// One candidate at a time: a selector with the distinct moves, and the card of the
-// selected one. Three stacked cards pushed everything off screen.
 
 // ---------------------------------------------------------------- coach
 
@@ -905,7 +937,7 @@ function reviewProgress() {
   const job = S.job;
   if (job?.status === 'error') {
     return [coachHead('Something went wrong'), el('p', { class: 'error' }, job.error || 'Error'),
-      STATIC ? el('a', { class: 'btn', href: '#/' }, '← Back to games') : el('button', { class: 'btn', onclick: () => { S.job = null; runReviewJob(); } }, 'Retry')];
+      STATIC ? el('a', { class: 'btn', href: '#/' }, '← Back to games') : el('button', { class: 'btn', onclick: route }, 'Retry')];
   }
   const msg = job?.message || 'Queued';
   const f = job?.fraction || 0;
@@ -949,21 +981,23 @@ function introView() {
     el('p', {}, list.length ? `I found ${parts.join(' and ')}.` : 'No critical moments: a clean game!'),
     list.length ? el('div', { class: 'moment-list' }, ...list.map(p => {
       const k = kindOf(p);
-      const j = JUDGEMENTS[p.judgement];
       const c = criticalAt(p.ply);
-      const note = k === 'mistake' ? `${j?.label || ''} · best was ${c?.facts.best.san || p.best_san}` : alternativesNote(c);
+      const note = k === 'mistake' ? `best was ${c?.facts.best.san || p.best_san}` : alternativesNote(c);
       return el('button', { class: `moment-row k-${k}`, onclick: () => go(p.ply, { silent: true }) },
-        el('span', { class: 'moment-icon' }, KINDS[k].icon),
-        el('span', { class: 'mv' }, moveLabel(p)),
+        el('span', { class: 'moment-icon', title: KINDS[k].label }, KINDS[k].icon),
+        el('span', { class: 'moment-move' }, jIcon(p.judgement, 'sm'), el('span', { class: 'mv' }, moveLabel(p))),
         el('span', { class: 'muted small' }, note));
     })) : null,
     list.length ? el('button', { class: 'btn primary', onclick: () => jumpMoment(1) }, 'Start with the first moment ▶') : null,
+    qualityTable(),
   ];
 }
 
 function alternativesNote(c) {
   if (!c) return '';
   const f = c.facts;
+  const role = f.played?.roles?.[0];
+  if (role && role !== 'best') return `you found the ${ROLES[role].label.toLowerCase()} move`;
   const notes = [];
   if (!f.same?.simple_is_best) notes.push(`simplest ${f.simple.san}`);
   if (!f.same?.tricky_is_best) notes.push(`trickiest ${f.tricky.san}`);
@@ -974,13 +1008,8 @@ function moveInfo() {
   if (S.variation) return [coachHead('Explore', 'Move the pieces to try other ideas')];
   const i = S.cur;
   const p = S.plies[i - 1];
-  const j = JUDGEMENTS[p.judgement] || { label: '', icon: '' };
   const mine = p.color === S.meta.user_color;
-  const who = mine ? 'You played' : `${S.meta.opponent} played`;
-  const out = [coachHead(`${who} ${moveLabel(p)}`, null),
-    el('div', { class: 'verdict' },
-      el('span', { class: `badge j-${p.judgement}` }, el('span', { class: 'j-icon' }, j.icon), j.label),
-      el('span', { class: 'muted small' }, `eval ${p.white_eval} (White)`))];
+  const out = [verdict(p, mine ? 'your move' : `${S.meta.opponent}'s move`, forUser(p.white_eval))];
   if (p.uci !== p.best_uci && ['inaccuracy', 'mistake', 'blunder'].includes(p.judgement)) {
     out.push(el('p', {}, 'Better was ', el('span', { class: 'mv' }, p.best_san), '. ',
       el('button', { class: 'link', onclick: () => { go(i - 1, { silent: true }); S.hint = p.best_uci; drawShapes(); } }, 'Show me')));
@@ -1008,8 +1037,23 @@ function analyseButton() {
     el('span', { class: 'muted small' }, `to move: ${side} · about 15 seconds`));
 }
 
-function stat(label, value, title) {
-  return el('span', { class: 'stat', title }, el('span', { class: 'muted' }, label), el('b', {}, value));
+// The headline of a move: its class badge, "14.h4 is the trickiest move", the eval.
+function verdict(p, sub, evalText) {
+  const j = JUDGEMENTS[p.judgement] || { phrase: '' };
+  return el('div', { class: `verdict j-${p.judgement}` },
+    jIcon(p.judgement, 'lg'),
+    el('div', { class: 'verdict-text' },
+      el('h3', {}, el('span', { class: 'mv' }, moveLabel(p)), ` ${j.phrase}`),
+      sub ? el('span', { class: 'muted small' }, sub) : null),
+    evalText ? el('span', { class: 'verdict-eval', title: 'Evaluation after the move, from your point of view' }, evalText) : null);
+}
+
+// An eval written from White's side ("+0.85", "#-3"), seen from the user's side.
+function forUser(whiteEval) {
+  if (S.meta.user_color === 'white' || !whiteEval) return whiteEval;
+  if (whiteEval.startsWith('#')) return whiteEval.startsWith('#-') ? `#${whiteEval.slice(2)}` : `#-${whiteEval.slice(1)}`;
+  const n = -parseFloat(whiteEval);
+  return `${n >= 0 ? '+' : ''}${n.toFixed(2)}`;
 }
 
 function playedLineAction(f) {
@@ -1024,23 +1068,27 @@ function criticalView(advice) {
   const n = advice.narration || {};
   const kind = advice.kind || 'mistake';
   const p = S.plies[S.cur];
-  const j = JUDGEMENTS[p.judgement] || { label: '' };
-  const out = [coachHead(`${KINDS[kind].icon} ${KINDS[kind].label}`, `Move ${moveLabel(p)}`, `k-${kind}`)];
-  out.push(el('div', { class: 'compare' },
-    el('div', { class: 'cmp played' }, el('span', { class: 'muted small' }, 'you played'),
-      el('span', {}, el('b', { class: 'mv' }, f.played.move), ' ', el('span', { class: `badge j-${p.judgement}` }, j.label)),
-      el('span', { class: 'small' }, `${f.played.eval} for you`)),
-    el('div', { class: 'cmp best' }, el('span', { class: 'muted small' }, 'the best'),
-      el('b', { class: 'mv' }, f.best.move), el('span', { class: 'small' }, `${f.best.eval} for you`))));
-  const roles = f.played.roles || [];
-  if (kind === 'choice' && roles.length && !roles.includes('best')) {
-    out.push(el('p', { class: 'praise' }, `Nice choice: that was the ${roles.map(r => ROLES[r].label.toLowerCase()).join(' and the ')} move.`));
-  }
+  const list = moments();
+  const idx = list.findIndex(m => m.ply === S.cur);
+  const navBtn = (label, title, dir, off) => el('button', {
+    class: 'icon-btn tiny', title, 'aria-label': title, disabled: off, onclick: () => jumpMoment(dir),
+  }, label);
+  const out = [
+    el('div', { class: `moment-bar k-${kind}` },
+      el('span', { class: 'moment-kind' }, `${KINDS[kind].icon} ${KINDS[kind].label}`),
+      el('span', { class: 'moment-nav' },
+        navBtn('◀', 'Previous key moment (P)', -1, idx <= 0),
+        el('span', { class: 'muted small' }, `${idx + 1} of ${list.length}`),
+        navBtn('▶', 'Next key moment (N)', 1, idx >= list.length - 1))),
+    verdict(p, 'your move', f.played.eval),
+  ];
   if (n.summary) out.push(el('p', { class: 'summary-text' }, ...richText(n.summary)));
+  const afterYours = kind === 'mistake' ? playedLineAction(f) : null;
+  if (afterYours) out.push(el('button', { class: 'link warn', onclick: afterYours }, '↯ See what happens after your move'));
   if (f.same?.only_one_candidate) {
     out.push(el('p', { class: 'muted small' }, 'There was only one good move here: no alternatives within the margin.'));
   }
-  out.push(...optionsSection(advice, { playedLine: kind === 'mistake' ? playedLineAction(f) : null }));
+  out.push(...optionsSection(advice));
   out.push(narrationFooter(n));
   return out;
 }
@@ -1121,48 +1169,46 @@ function selectGroup(i) {
   updateCoach();
 }
 
-function optionsSection(advice, { playedLine = null } = {}) {
+// The distinct candidate moves as an accordion: one row each (badges, roles, move,
+// eval) and only the selected one open with its explanation and numbers.
+function optionsSection(advice) {
   const groups = adviceGroups(advice);
   const n = advice.narration || {};
-  if (S.sel == null || S.sel >= groups.length) S.sel = defaultGroup(groups, advice.kind, advice.critical ? advice.facts.played : null);
-  const out = [];
-  if (groups.length > 1) {
-    out.push(el('div', { class: 'role-tabs', role: 'tablist' }, ...groups.map((g, i) =>
-      el('button', {
-        class: `role-tab ${g.roles[0]}${i === S.sel ? ' on' : ''}`,
-        role: 'tab',
-        'aria-selected': String(i === S.sel),
-        title: `Key ${i + 1}`,
-        onclick: () => selectGroup(i),
-      },
-      el('span', { class: 'role-names' }, g.roles.map(r => ROLES[r].label).join(' · ')),
-      el('span', { class: 'role-move' }, el('b', { class: 'mv' }, g.c.san), el('span', { class: 'muted' }, ` ${g.c.eval}`))))));
-  }
-  out.push(groupCard(groups[S.sel], n, playedLine));
-  return out;
+  const played = advice.critical ? advice.facts.played : null;
+  if (S.sel == null || S.sel >= groups.length) S.sel = defaultGroup(groups, advice.kind, played);
+  return [
+    el('div', { class: 'options-label' }, el('span', {}, groups.length > 1 ? 'Your options' : 'The move'),
+      el('span', { class: 'muted' }, 'eval for you')),
+    el('div', { class: 'options' }, ...groups.map((g, i) => optionRow(g, i, n, played?.uci))),
+  ];
 }
 
-function groupCard({ c, roles }, n, playedLine) {
+function optionRow({ c, roles }, i, n, playedUci) {
+  const open = i === S.sel;
   const [primary, ...others] = roles;
+  const head = el('button', { class: 'opt-head', 'aria-expanded': String(open), title: `Key ${i + 1}`, onclick: () => selectGroup(i) },
+    el('span', { class: 'opt-icons' }, ...roles.map(r => jIcon(r))),
+    el('span', { class: 'opt-roles' }, roles.map(r => ROLES[r].label).join(' · ')),
+    el('span', { class: 'opt-move' }, el('b', { class: 'mv' }, c.san), c.uci === playedUci ? el('span', { class: 'tag mine' }, 'yours') : null),
+    el('span', { class: 'opt-eval' }, c.eval));
+  if (!open) return el('div', { class: `opt ${primary}` }, head);
   const traps = roles.includes('tricky') ? c.traps : null;
-  return el('div', { class: `advice ${primary}` },
-    el('div', { class: 'advice-head' },
-      ...roles.map(r => el('span', { class: `pill ${r}` }, ROLES[r].label)),
-      el('b', { class: 'mv' }, c.move),
-      el('span', { class: 'eval', title: 'Evaluation from your point of view' }, c.eval, el('small', {}, ' for you'))),
-    n[primary] ? el('p', {}, ...richText(n[primary])) : null,
-    ...others.map(r => (n[r] ? el('p', { class: 'secondary' }, ...richText(n[r])) : null)),
-    el('div', { class: 'stats' },
-      stat('at your level', c.at_your_level, 'Expected evaluation if you keep playing at your level'),
-      stat('vs a human', c.vs_human, 'Expected evaluation against a real opponent of their level'),
-      stat('natural', pct(c.naturalness), 'How many players at your level would choose it'),
-      c.opponent_error_prob > 0 ? stat('opp. error', pct(c.opponent_error_prob), 'Chance that the opponent replies with a mistake') : null),
-    el('div', { class: 'advice-actions' },
-      el('button', { class: 'link', onclick: () => playLine(c.line.uci, `${ROLES[primary].label}: ${c.move}`) }, '▶ Show the line'),
-      traps?.[0]?.punishment_uci
-        ? el('button', { class: 'link', onclick: () => playLine([c.uci, traps[0].reply_uci, traps[0].punishment_uci], `Trap: ${c.move}`) }, '⚑ Show the trap')
-        : null,
-      playedLine && primary === 'best'
-        ? el('button', { class: 'link warn', onclick: playedLine }, '↯ What happened after your move')
-        : null));
+  return el('div', { class: `opt ${primary} open` }, head,
+    el('div', { class: 'opt-body' },
+      n[primary] ? el('p', {}, ...richText(n[primary])) : null,
+      ...others.map(r => (n[r] ? el('p', { class: 'secondary' }, ...richText(n[r])) : null)),
+      el('div', { class: 'facts' },
+        fact('At your level', c.at_your_level, 'Expected evaluation if you keep playing at your level'),
+        fact('Vs a human', c.vs_human, 'Expected evaluation against a real opponent of their level'),
+        fact('Found by', pct(c.naturalness), 'How many players at your level would choose it'),
+        c.opponent_error_prob > 0 ? fact('Opponent errs', pct(c.opponent_error_prob), 'Chance that the opponent replies with a mistake') : null),
+      el('div', { class: 'opt-actions' },
+        el('button', { class: 'link', onclick: () => playLine(c.line.uci, `${ROLES[primary].label}: ${c.move}`) }, '▶ Show the line'),
+        traps?.[0]?.punishment_uci
+          ? el('button', { class: 'link', onclick: () => playLine([c.uci, traps[0].reply_uci, traps[0].punishment_uci], `Trap: ${c.move}`) }, '⚑ Show the trap')
+          : null)));
+}
+
+function fact(label, value, title) {
+  return el('div', { class: 'fact', title }, el('span', { class: 'muted' }, label), el('b', {}, value));
 }

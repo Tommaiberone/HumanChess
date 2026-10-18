@@ -60,6 +60,24 @@ In both Maia modes, human nodes are weighted by Maia's probabilities, and the le
 
 Demo games are hand-built records in `data/games/demo*.json` (with `"demo": true`, a `title`, an explicit `user_color` and optional `key_plies` that are always reviewed). They are listed first, both locally and in the shared site.
 
+## Live app on AWS Lambda
+
+The full app (live reviews included) also runs on AWS, so it works from a phone with no server to start. It uses only always-free services: Lambda (zip packages and a function URL), DynamoDB with provisioned capacity, and CloudWatch Logs. There is no ECR, S3 or API Gateway, which past an account's first year have no free tier. `infra/app/` is a separate Terraform stack from the showcase. Two functions share one zip package:
+
+- `smartchess-api` (1 GB) serves the frontend and the API behind a public function URL. The app asks for a password on a sign-in page and keeps a session cookie. Basic auth is not an option there, because a function URL renames `WWW-Authenticate`; it still works for scripts (user `smartchess`). A cold start takes about 2 s.
+- `smartchess-worker` (3008 MB, about 2 vCPU, 15 min timeout) runs Stockfish and Maia-3. The API hands it every analysis with an asynchronous invoke, with no retries and a reserved concurrency of 2. The worker writes its progress to DynamoDB, and the frontend polls `/api/jobs/{id}` as it does locally.
+
+A zip package holds at most 250 MB, and torch alone takes about 700. So on Lambda, Maia-3 runs on numpy (`smartchess.maia_np`, checked against torch in `tests/test_maia_np.py`), with its weights in two layers. Stockfish 19 is downloaded from its GitHub release on a cold start and checked against its SHA-256. A 92-ply game takes about 3.5 minutes; a cold start adds about 7 s. 3008 MB is the account's memory limit for now; more memory would give more CPU and a faster review at about the same cost (`TF_VAR_worker_memory`).
+
+Games, reviews and jobs are JSON documents (`smartchess.web.store`): files under `data/` locally, zlib-compressed DynamoDB items on Lambda. Jobs expire through a TTL. `bash scripts/deploy_app.sh -auto-approve` does the following:
+
+1. Exports the Maia-3 weights once (`scripts/export_maia.py`, with torch).
+2. Builds the zips (`scripts/build_lambda.py`, Linux wheels installed by uv, no Docker).
+3. Applies Terraform, which uploads a zip only when its hash changes.
+4. Copies to DynamoDB the local demo games, plus any local reviews the table lacks.
+
+The Groq key is read from `.env`. The password is generated unless `TF_VAR_app_password` is set, and `terraform -chdir=infra/app output -raw password` prints it.
+
 ## Explanations
 
 Explanations are built from facts: candidate lines, traps, critical moments, and simple motifs such as captures, checks and attacks on undefended pieces. When `GROQ_API_KEY` is set (in the environment or in `.env`), an LLM on Groq rewrites these facts as friendly prose. It uses `qwen3.8-27b` and falls back to `gpt-oss-120b`; when both are rate limited it waits instead of switching to a weaker model. Any piece move the LLM mentions that is not in the facts makes the answer rejected, and the template text is used instead.

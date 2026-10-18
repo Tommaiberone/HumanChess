@@ -267,18 +267,29 @@ def review_game(
 
     analysed = _parallel(engines, deep, todo, lambda n: progress(
         f"Analysing the key moments: {n}/{len(todo)}", 0.5 + 0.4 * n / max(1, len(todo))))
-    reviews: list[MoveReview] = []
+    kept: list[MoveReview] = []  # mistakes, and practical options the user played
+    choices: list[MoveReview] = []
     for review in analysed:
         a = review.analysis
-        if review.kind == "choice" and review.ply not in force_plies:
+        if review.kind == "mistake" and review.played != a.best.move:
+            if review.played in (a.simplest.move, a.trickiest.move):
+                # The quick pass saw a loss, but the deep search counts the played move
+                # among the options: the user made a practical choice, not a mistake.
+                review.kind = "choice"
+            kept.append(review)
+            continue
+        # A "mistake" that the deep search finds best was misjudged by the quick pass:
+        # like any choice, it stays only if the alternatives have something to say.
+        review.kind = "choice"
+        if review.ply not in force_plies:
             review.gain = max(a.simplest.simple - a.best.simple, a.trickiest.tricky - a.best.tricky)
             differs = a.simplest.move != a.best.move or a.trickiest.move != a.best.move
             if not differs or review.gain < CHOICE_GAIN:
                 continue
-        reviews.append(review)
+        choices.append(review)
 
-    choices = sorted((r for r in reviews if r.kind == "choice"), key=lambda r: r.gain, reverse=True)[:max_choices]
-    chosen = sorted([r for r in reviews if r.kind == "mistake"] + choices, key=lambda r: r.ply)
+    choices = sorted(choices, key=lambda r: r.gain, reverse=True)[:max_choices]
+    chosen = sorted(kept + choices, key=lambda r: r.ply)
     return GameReview(game, players, chosen, plies)
 
 

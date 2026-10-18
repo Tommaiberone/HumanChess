@@ -154,7 +154,7 @@ def review_json(review, narrations: dict[int, dict]) -> dict:
                                         mr.played_line.pv if mr.played_line else None, mr.kind),
                 "narration": narrations.get(mr.ply),
             }
-    return {
+    return mark_played_options({
         "game": {
             "white": h.get("White", "?"),
             "black": h.get("Black", "?"),
@@ -171,7 +171,27 @@ def review_json(review, narrations: dict[int, dict]) -> dict:
         "accuracy": {"white": review.accuracy(chess.WHITE), "black": review.accuracy(chess.BLACK)},
         "plies": plies,
         "critical": critical,
-    }
+    })
+
+
+def mark_played_options(review: dict) -> dict:
+    """At key moments, judge the user's move by the three options.
+
+    The quick pass judges every move by its win% loss; at a key moment the deep search
+    knows better, so a move that is the best, simplest or trickiest option is shown as
+    such and never as a mistake. Reviews saved before this rule are fixed when read
+    (their explanations change only when rewritten).
+    """
+    for ply, item in review["critical"].items():
+        roles = (item["facts"].get("played") or {}).get("roles") or []
+        if not roles:
+            continue
+        p = review["plies"][int(ply)]
+        p["judgement"] = roles[0]
+        if item.get("kind") == "mistake":
+            item["kind"] = p["critical_kind"] = "choice"
+            item["facts"]["moment"] = MOMENT_LABELS["choice"]
+    return review
 
 
 def allowed_moves(facts: dict) -> set[str]:

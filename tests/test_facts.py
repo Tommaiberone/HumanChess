@@ -1,7 +1,7 @@
 import chess
 
 from smartchess.engine import LineEval
-from smartchess.facts import allowed_moves, motifs, normalize_san
+from smartchess.facts import allowed_moves, mark_played_options, motifs, normalize_san
 from smartchess.llm import invented_moves
 from smartchess.review import PlyInfo
 
@@ -56,3 +56,24 @@ def test_material_and_pieces():
     assert material(b, chess.WHITE) - material(b, chess.BLACK) == 0
     assert pieces(b, chess.WHITE) == "knight, 2 pawns"
     assert pieces(b, chess.BLACK) == "rook"
+
+
+def _review(kind, roles, judgement="inaccuracy"):
+    return {
+        "plies": [{"ply": 0, "judgement": judgement, "critical": True, "critical_kind": kind}],
+        "critical": {"0": {"kind": kind, "facts": {"moment": kind, "played": {"roles": roles}}}},
+    }
+
+
+def test_played_option_is_never_a_mistake():
+    r = mark_played_options(_review("mistake", ["tricky"]))
+    assert r["critical"]["0"]["kind"] == "choice" and r["plies"][0]["critical_kind"] == "choice"
+    assert r["critical"]["0"]["facts"]["moment"] == "practical choice"
+    assert r["plies"][0]["judgement"] == "tricky"
+    # When the move is both best and tricky, the best role wins the icon.
+    assert mark_played_options(_review("choice", ["best", "tricky"], "good"))["plies"][0]["judgement"] == "best"
+
+
+def test_other_moves_keep_their_judgement():
+    r = mark_played_options(_review("mistake", []))
+    assert r["critical"]["0"]["kind"] == "mistake" and r["plies"][0]["judgement"] == "inaccuracy"

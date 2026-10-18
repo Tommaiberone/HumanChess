@@ -21,7 +21,7 @@ def export_site(service: Service, out: Path, username: str) -> list[str]:
         shutil.rmtree(out)
     (out / "data" / "games").mkdir(parents=True)
     (out / "data" / "reviews").mkdir(parents=True)
-    shutil.copytree(STATIC_DIR, out / "static")
+    shutil.copytree(STATIC_DIR, out / "static", ignore=shutil.ignore_patterns("login.html"))
 
     index = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
     index = index.replace("<meta charset=\"utf-8\">", "<meta charset=\"utf-8\">\n  <meta name=\"smartchess-mode\" content=\"static\">", 1)
@@ -29,8 +29,7 @@ def export_site(service: Service, out: Path, username: str) -> list[str]:
     (out / "static" / "index.html").unlink()
 
     games = []
-    for review_path in sorted((service.data_dir / "reviews").glob("*.json")):
-        game_id = review_path.stem
+    for game_id in service.reviewed_ids():
         try:
             raw = service._raw_game(game_id)
         except KeyError:
@@ -40,7 +39,7 @@ def export_site(service: Service, out: Path, username: str) -> list[str]:
         games.append(summary)
         moves = service.game_moves(game_id, username)
         _write(out / "data" / "games" / f"{game_id}.json", moves)
-        shutil.copyfile(review_path, out / "data" / "reviews" / f"{game_id}.json")
+        _write(out / "data" / "reviews" / f"{game_id}.json", service.cached_review(game_id))
 
     # Demo games first, then the real ones from the newest.
     games.sort(key=lambda g: (g.get("demo", False), g.get("end_time") or 0), reverse=True)

@@ -22,6 +22,7 @@
   --best-bg: #e6f0e1;
   --simple-bg: #e2ecf4;
   --tricky-bg: #f8ead6;
+  --j-excellent: #5f9e8a; --j-good: #86a36d; --j-inaccuracy: #d6a12c; --j-mistake: #e0663f; --j-blunder: #c2392d;
   --sq-light: #f1dfc4;
   --sq-dark: #b98b62;
   --coord-on-light: #9a7351;
@@ -38,9 +39,9 @@
     --bg: #1d1814; --bg-2: #241e19; --card: #2a231e; --line: #3b3029; --text: #f0e6da; --muted: #b3a291;
     --accent: #e08a68; --accent-soft: #4a3226; --honey: #e2b55b; --sage: #93b086;
     --best: #79b56f; --simple: #6fa6d1; --tricky: #e9a552; --played: #e06a5f;
-  --mistake: #e57a62; --choice: #bb93cc; --mistake-bg: #3e2620; --choice-bg: #33283a;
     --mistake: #e57a62; --choice: #bb93cc; --mistake-bg: #3e2620; --choice-bg: #33283a;
     --best-bg: #2c3a29; --simple-bg: #26323d; --tricky-bg: #3d3122;
+    --j-excellent: #77b29f; --j-good: #9dba86; --j-inaccuracy: #e2b44e; --j-mistake: #ec7f5c; --j-blunder: #e05a4c;
     --sq-light: #d9c3a3; --sq-dark: #8f6a4b; --coord-on-light: #7a5a3f; --coord-on-dark: #ecdcc4;
     --eval-black: #15110e; --eval-white: #efe4d4;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
@@ -53,6 +54,7 @@
   --best: #79b56f; --simple: #6fa6d1; --tricky: #e9a552; --played: #e06a5f;
   --mistake: #e57a62; --choice: #bb93cc; --mistake-bg: #3e2620; --choice-bg: #33283a;
   --best-bg: #2c3a29; --simple-bg: #26323d; --tricky-bg: #3d3122;
+  --j-excellent: #77b29f; --j-good: #9dba86; --j-inaccuracy: #e2b44e; --j-mistake: #ec7f5c; --j-blunder: #e05a4c;
   --sq-light: #d9c3a3; --sq-dark: #8f6a4b; --coord-on-light: #7a5a3f; --coord-on-dark: #ecdcc4;
   --eval-black: #15110e; --eval-white: #efe4d4;
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
@@ -177,6 +179,13 @@ main { max-width: 1240px; margin: 0 auto; padding: 12px 16px 64px; }
 .player .piece-dot { margin-right: 2px; }
 .player .tag { margin-left: 2px; }
 .board-wrap { display: grid; grid-template-columns: 22px var(--board); gap: 12px; }
+.board-frame { position: relative; width: var(--board); }
+.board-badges { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+/* The last move's class on its square: 0.44 of a square, at the top-right corner. */
+.j-icon.on-board { position: absolute; width: 5.5%; height: 5.5%; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .4));
+  animation: badge-in .22s ease-out .12s both; }
+@keyframes badge-in { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .j-icon.on-board { animation: none; } }
 .board {
   aspect-ratio: 1; width: var(--board); border-radius: 10px; overflow: hidden;
   box-shadow: 0 0 0 6px #7a5434, 0 0 0 7px rgba(0, 0, 0, .15), 0 18px 40px rgba(60, 35, 15, .25);
@@ -230,14 +239,10 @@ cg-board square.check { background: radial-gradient(ellipse at center, rgba(200,
 
 /* ---------- summary + graph */
 .accuracy { display: flex; gap: 8px; }
-.acc { flex: 1; display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-radius: 12px; background: var(--bg); min-width: 0; }
+.acc { flex: 1; display: flex; align-items: baseline; gap: 8px; padding: 4px 10px; border-radius: 12px; background: var(--bg); min-width: 0; }
 .acc .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.acc-num { font: 700 22px Fraunces, Georgia, serif; color: var(--accent); }
+.acc-num { font: 700 20px Fraunces, Georgia, serif; color: var(--accent); }
 .acc-num.soft { color: var(--muted); }
-.counts { display: grid; gap: 2px; }
-.count-row { display: grid; grid-template-columns: 30px 28px 1fr 30px; align-items: center; font-size: 13px; }
-.count-row .n { font-weight: 800; text-align: center; }
-.count-row .n.soft { color: var(--muted); }
 .graph svg { width: 100%; height: 52px; display: block; border-radius: 12px; cursor: pointer; }
 .g-black { fill: var(--eval-black); }
 .g-white { fill: var(--eval-white); }
@@ -245,15 +250,23 @@ cg-board square.check { background: radial-gradient(ellipse at center, rgba(200,
 .g-crit { fill: var(--honey); stroke: var(--card); stroke-width: 1.5; }
 .g-cursor { stroke: var(--accent); stroke-width: 3; }
 
-/* ---------- judgements */
-.j-icon { display: inline-grid; place-items: center; min-width: 20px; height: 18px; padding: 0 3px; border-radius: 6px;
-  font-size: 11px; font-weight: 800; color: #fff8ef; background: var(--muted); margin-left: 4px; }
-.j-best .j-icon { background: var(--best); }
-.j-excellent .j-icon { background: #5f9e8a; }
-.j-good .j-icon { background: var(--sage); }
-.j-inaccuracy .j-icon { background: var(--honey); }
-.j-mistake .j-icon { background: #d9772b; }
-.j-blunder .j-icon { background: var(--played); }
+/* ---------- move classes: chess.com-style badges (simplest: shield, trickiest: bolt) */
+.j-icon { display: inline-flex; flex: none; width: 20px; height: 20px; --j: var(--muted); }
+.j-icon svg { width: 100%; height: 100%; display: block; }
+.j-icon circle { fill: var(--j); }
+.j-icon path, .j-icon text { fill: #fff; }
+.j-icon path.stroke { fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.j-icon text { font-family: Nunito, system-ui, sans-serif; font-weight: 900; text-anchor: middle; letter-spacing: -.04em; }
+.j-icon.sm { width: 16px; height: 16px; }
+.j-icon.lg { width: 32px; height: 32px; }
+.j-best { --j: var(--best); }
+.j-simple { --j: var(--simple); }
+.j-tricky { --j: var(--tricky); }
+.j-excellent { --j: var(--j-excellent); }
+.j-good { --j: var(--j-good); }
+.j-inaccuracy { --j: var(--j-inaccuracy); }
+.j-mistake { --j: var(--j-mistake); }
+.j-blunder { --j: var(--j-blunder); }
 
 /* ---------- moves */
 .moves { margin-top: 8px; position: relative; }
@@ -262,7 +275,7 @@ cg-board square.check { background: radial-gradient(ellipse at center, rgba(200,
 .move-no { color: var(--muted); font-size: 13px; padding: 4px 0 0 8px; }
 .move {
   font: inherit; font-weight: 700; text-align: left; background: none; border: 0; color: var(--text);
-  padding: 3px 8px; border-radius: 8px; cursor: pointer; display: flex; align-items: center;
+  padding: 3px 8px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px;
 }
 .move:hover { background: var(--accent-soft); }
 .move.active { background: var(--accent); color: #fff8ef; }
@@ -280,16 +293,8 @@ cg-board square.check { background: radial-gradient(ellipse at center, rgba(200,
 .coach-head h3 { line-height: 1.2; }
 .coach p { margin: 0; }
 .summary-text { font-size: 15px; }
-.advice { border-radius: 14px; padding: 12px 14px; display: grid; gap: 6px; border: 1px solid transparent; }
-.advice.best { background: var(--best-bg); }
-.advice.simple { background: var(--simple-bg); }
-.advice.tricky { background: var(--tricky-bg); }
-.advice.same { opacity: .85; }
-.advice-head { display: flex; align-items: center; gap: 8px; }
-.advice-head .eval { margin-left: auto; font-weight: 800; color: var(--muted); }
 .pill { font-size: 12px; font-weight: 800; padding: 2px 9px; border-radius: 999px; color: #fff8ef; }
 .pill.best { background: var(--best); } .pill.simple { background: var(--simple); } .pill.tricky { background: var(--tricky); }
-.advice-actions { display: flex; gap: 16px; }
 .progress { display: grid; gap: 8px; }
 .progress-track { height: 10px; border-radius: 999px; background: var(--bg-2); overflow: hidden; }
 .progress-fill { height: 100%; background: linear-gradient(90deg, var(--honey), var(--accent)); border-radius: 999px; transition: width .6s ease; }
@@ -311,23 +316,14 @@ cg-board square.check { background: radial-gradient(ellipse at center, rgba(200,
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
 
-/* ---------- review: header, moments, legend */
+/* ---------- review: header, legend */
 .side-top { display: flex; justify-content: space-between; }
-.moment-chips { display: grid; gap: 6px; }
-.moment-chips .chips { margin: 0; }
-.chip.moment.k-mistake { color: var(--mistake); }
-.chip.moment.k-choice { color: var(--choice); }
-.chip.moment.on.k-mistake, .chip.moment.k-mistake:hover { background: var(--mistake-bg); color: var(--mistake); }
-.chip.moment.on.k-choice, .chip.moment.k-choice:hover { background: var(--choice-bg); color: var(--choice); }
 .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; min-height: 20px; font-size: 13px; color: var(--muted); padding-left: 34px; }
 .legend .sw { display: inline-block; width: 18px; height: 6px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
 .sw.best { background: var(--best); } .sw.simple { background: var(--simple); } .sw.tricky { background: var(--tricky); } .sw.played { background: var(--played); opacity: .7; }
 .keys { margin: 12px 0 0; }
-.counts-box summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--muted); padding: 4px 0; }
-.counts-box[open] summary { margin-bottom: 6px; }
-.count-row.head { font-size: 12px; }
 
-/* ---------- coach: progress, compare, cards */
+/* ---------- coach: progress, verdict, options */
 .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .steps li { display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 600; }
 .steps li.now { color: var(--text); }
@@ -336,34 +332,65 @@ cg-board square.check { background: radial-gradient(ellipse at center, rgba(200,
   background: var(--bg-2); color: var(--muted); }
 .steps li.now .step-dot { background: var(--honey); color: #fff8ef; }
 .steps li.done .step-dot { background: var(--sage); color: #fff8ef; }
-.coach-head.k-mistake h3 { color: var(--mistake); }
-.coach-head.k-choice h3 { color: var(--choice); }
-.coach-head.k-mistake .coach-avatar { background: var(--mistake-bg); color: var(--mistake); }
-.coach-head.k-choice .coach-avatar { background: var(--choice-bg); color: var(--choice); }
-.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.cmp { display: grid; gap: 2px; justify-items: start; padding: 10px 12px; border-radius: 14px; background: var(--bg); }
-.cmp .mv { font-size: 18px; }
-.cmp.best { background: var(--best-bg); }
-.badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 800; padding: 1px 8px 1px 2px;
-  border-radius: 999px; background: var(--bg-2); }
-.badge .j-icon { margin-left: 0; }
-.verdict { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.praise { background: var(--best-bg); color: var(--best); font-weight: 700; padding: 8px 12px; border-radius: 12px; }
-.advice { transition: box-shadow .15s, transform .15s; }
-.advice:hover { box-shadow: 0 0 0 2px var(--line); }
-.advice p.secondary { color: var(--muted); font-size: 14px; }
-.advice-head { flex-wrap: wrap; }
-.stats { display: flex; flex-wrap: wrap; gap: 6px; }
-.stat { display: inline-flex; gap: 6px; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--card); cursor: help; }
-.advice-actions { flex-wrap: wrap; }
-.link.warn { color: var(--played); }
+
+/* The headline of a move: badge, "8.h4 is the trickiest move", eval. */
+.verdict { display: flex; align-items: center; gap: 12px; }
+.verdict-text { display: grid; flex: 1; min-width: 0; }
+.verdict h3 { font-size: 18px; line-height: 1.25; }
+.verdict.j-best h3, .verdict.j-simple h3, .verdict.j-tricky h3 { color: var(--j); }
+.verdict-eval { flex: none; font-weight: 800; font-size: 14px; padding: 3px 10px; border-radius: 10px; background: var(--bg); cursor: help; }
+
+/* Which key moment this is, with its own previous / next. */
+.moment-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.moment-bar.k-mistake .moment-kind { color: var(--mistake); }
+.moment-bar.k-choice .moment-kind { color: var(--choice); }
+.moment-nav { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; }
+.icon-btn.tiny { display: inline-grid; place-items: center; width: 28px; height: 26px; font-size: 10px; line-height: 1;
+  border-radius: 8px; padding: 0; }
+.icon-btn:disabled { opacity: .35; cursor: default; border-color: var(--line); color: var(--text); }
+
+/* Candidate moves: rows that open one at a time. */
+.options-label { display: flex; justify-content: space-between; font-size: 12px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+.options-label .muted { text-transform: none; letter-spacing: 0; font-weight: 700; }
+.options { display: grid; gap: 6px; }
+.opt { border-radius: 12px; background: var(--bg); transition: background .15s; }
+.opt.open { box-shadow: inset 3px 0 0 var(--role); }
+.opt.best { --role: var(--best); } .opt.simple { --role: var(--simple); } .opt.tricky { --role: var(--tricky); }
+.opt.open.best { background: var(--best-bg); } .opt.open.simple { background: var(--simple-bg); } .opt.open.tricky { background: var(--tricky-bg); }
+.opt-head { font: inherit; color: var(--text); width: 100%; display: grid; grid-template-columns: auto 1fr auto auto; align-items: center;
+  gap: 8px; padding: 8px 12px; border: 0; background: none; border-radius: 12px; cursor: pointer; text-align: left; }
+.opt:not(.open) .opt-head:hover { background: var(--accent-soft); }
+.opt-icons { display: flex; gap: 2px; }
+.opt-roles { font-size: 13px; font-weight: 800; color: var(--role); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opt-move { display: flex; align-items: center; gap: 6px; }
+.opt-move .mv { font-size: 15px; }
+.tag.mine { margin: 0; background: var(--card); color: var(--text); }
+.opt-eval { font-weight: 800; color: var(--muted); min-width: 44px; text-align: right; }
+.opt-body { display: grid; gap: 8px; padding: 0 12px 12px 15px; }
+.opt-body p { font-size: 14px; }
+.opt-body p.secondary { color: var(--muted); }
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; font-size: 13px; }
+.fact { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px dashed var(--line); cursor: help; }
+.opt-actions { display: flex; flex-wrap: wrap; gap: 16px; }
+.link.warn { color: var(--played); justify-self: start; }
 .link.tiny { font-size: 12px; }
 .footnote { margin: 0; }
+
+/* Start of the review: moments and move quality. */
 .moment-list { display: grid; gap: 6px; }
-.moment-row { font: inherit; display: grid; grid-template-columns: 22px auto 1fr; align-items: center; gap: 8px; text-align: left;
+.moment-row { font: inherit; display: grid; grid-template-columns: 22px auto 1fr; align-items: center; gap: 10px; text-align: left;
   padding: 8px 10px; border-radius: 12px; border: 1px solid transparent; background: var(--bg); color: var(--text); cursor: pointer; }
 .moment-row:hover { border-color: var(--line); }
 .moment-icon { font-weight: 800; }
+.moment-move { display: inline-flex; align-items: center; gap: 6px; }
+.quality { display: grid; gap: 3px; margin-top: 4px; }
+.q-row { display: grid; grid-template-columns: 1fr 44px 44px; align-items: center; font-size: 14px; padding: 2px 4px; }
+.q-row.head { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.q-label { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.q-row .n { font-weight: 800; text-align: center; }
+.q-row .n.soft { color: var(--muted); }
 .moment-row.k-mistake .moment-icon { color: var(--mistake); }
 .moment-row.k-choice .moment-icon { color: var(--choice); }
 .btn.soft.k-mistake { background: var(--mistake-bg); color: var(--mistake); }
@@ -396,20 +423,8 @@ cg-board square.check { background: radial-gradient(ellipse at center, rgba(200,
 .tab.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(60, 40, 20, .12); }
 .panes { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -6px; padding: 2px 6px 6px; scrollbar-width: thin; }
 .pane[hidden] { display: none; }
-.coach { gap: 10px; }
-.role-tabs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
-.role-tab { font: inherit; display: grid; gap: 2px; justify-items: start; text-align: left; padding: 7px 9px; border-radius: 12px;
-  border: 2px solid transparent; background: var(--bg); color: var(--text); cursor: pointer; min-width: 0; }
-.role-tab .role-names { font-size: 11px; font-weight: 800; letter-spacing: .01em; }
-.role-tab .role-move { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.role-tab.best .role-names { color: var(--best); } .role-tab.simple .role-names { color: var(--simple); } .role-tab.tricky .role-names { color: var(--tricky); }
-.role-tab.on.best { border-color: var(--best); background: var(--best-bg); }
-.role-tab.on.simple { border-color: var(--simple); background: var(--simple-bg); }
-.role-tab.on.tricky { border-color: var(--tricky); background: var(--tricky-bg); }
-.cmp { padding: 8px 10px; }
-.cmp .mv { font-size: 16px; }
+.coach { gap: 12px; }
 .summary-text { font-size: 14px; }
-.advice p { font-size: 14px; }
 
 /* The review fills the window: no bottom padding that would make the page scroll. */
 main:has(.review) { padding-bottom: 0; max-width: none; }
@@ -417,6 +432,13 @@ main:has(.review) { padding-bottom: 0; max-width: none; }
 body:has(.review) .topbar { max-width: none; padding-left: 28px; padding-right: 28px; }
 .list-title { font-size: 20px; margin-bottom: 4px; }
 .showcase-note { text-align: center; margin-top: 14px; }
+
+/* ---------- sign in (only when the app has a password, as on AWS) */
+.login { max-width: 380px; margin: 48px auto 0; display: grid; gap: 14px; }
+.login h1 { font-size: 28px; }
+.login p { margin: 0; }
+.login-field { display: grid; gap: 6px; font-weight: 700; }
+.login .btn { justify-self: start; }
 
 /* ---------- demo games */
 .tag.demo { background: var(--choice-bg); color: var(--choice); margin: 0 8px 0 0; text-transform: uppercase; letter-spacing: .04em; }

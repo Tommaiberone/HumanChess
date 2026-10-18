@@ -59,7 +59,7 @@ def _settings(args) -> Settings:
 
 
 def _engines(args):
-    from .human import Maia3  # imports torch, so keep it out of --help
+    from .maia import Maia3  # imports torch, so keep it out of --help
 
     per_engine = max(1, args.threads // args.workers)
     return [Stockfish(threads=per_engine, hash_mb=256, depth=args.depth) for _ in range(args.workers)], Maia3(args.model)
