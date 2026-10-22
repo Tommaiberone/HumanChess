@@ -28,9 +28,18 @@ User: 1400 rapid on Chess.com, about 1700 on the Maia scale (Lichess blitz).
   - [ ] Lichess import and openings from the Lichess Opening Explorer.
   - [ ] Optional: AWS Lambda to analyse the critical positions in parallel.
   - [x] Static showcase on S3 + CloudFront (`scripts/deploy.sh`): https://d10viis4vhdzq8.cloudfront.net/
-  - [ ] Stockfish (WASM) and Maia-3 (ONNX) in the browser, for live analysis on the shared site. Feasibility checked: Stockfish lite single-threaded is about 1.7 MB, and Maia-3 5M exports to ONNX (21 MB) with outputs matching PyTorch.
+  - [x] Stockfish (WASM) and Maia-3 (ONNX) in the browser (`src/smartchess/web/analysis/`): the public site needs no backend. Chess.com and Lichess import, pasted PGN, reviews kept in IndexedDB. The JS port is tested against Python fixtures and gives reproducible reviews.
+  - [ ] Validate the Lichess import end to end (its export answered 404 for every account from the development network).
+  - [ ] Explanations with an LLM on the public site: needs a small proxy that keeps the key and limits requests.
+  - [ ] Share a review by link (needs a tiny store; the review JSON is about 15 KB compressed).
 - [x] **6. Performance**: pool of 3 Stockfish instances in parallel (reviews about 2.3x faster: 309 s → 132 s).
   - [ ] Batched Maia inference per node.
+
+## Findings that shape the browser version (2026-10-22)
+- Maia 5M predicts real moves as well as 23M (54.3% vs 54.8% top-1 on 1,449 positions) and is 4x smaller: it is the browser default.
+- Stockfish lite shifts evals by about 2 win% points on average and changes about a third of the move classes against full Stockfish; the review differences between configurations are of the size of the run-to-run noise of the Python pipeline (two runs of the same config agree on 63% of key moments).
+- The Python pipeline is not reproducible (shared hash, time limits, task order). The browser one is: node-limited searches, clean engine per task.
+- Also fixed: `format_cp` showed mate in 3 as `#2` (Stockfish counts moves, not plies).
 
 ## Parameters to revisit
 - Margins: 0.6 pawns for the simplest move (`--margin 60`) and 1 pawn for the trickiest (`--tricky-margin 100`). Measured on 16 positions: a wider margin only helps the tricky move.

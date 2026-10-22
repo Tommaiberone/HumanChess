@@ -1,5 +1,5 @@
-import { Chessground } from 'https://cdn.jsdelivr.net/npm/@lichess-org/chessground@10.4.2/dist/chessground.min.js';
-import { Chess } from 'https://cdn.jsdelivr.net/npm/chess.js@1.4.0/+esm';
+import { Chessground } from './dist/chessground.js';
+import { Chess } from './dist/chess.js';
 
 // ---------------------------------------------------------------- helpers
 
@@ -21,35 +21,22 @@ function el(tag, props = {}, ...kids) {
   return e;
 }
 
-// In the shared static site there is no backend: reads come from data/*.json and
-// anything that needs the engines is unavailable.
-const STATIC = document.querySelector('meta[name="smartchess-mode"]')?.content === 'static';
+// "browser" mode (the public site): there is no server. Games come straight from
+// Chess.com or Lichess, and Stockfish and Maia run in this page's own workers
+// (static/dist, built by `npm run build`). "server" mode talks to the Python API.
+const BROWSER = document.querySelector('meta[name="smartchess-mode"]')?.content === 'browser';
 
-function staticPath(path) {
-  const url = new URL(path, location.origin);
-  const p = url.pathname;
-  if (p === '/api/config') return '/data/config.json';
-  if (p === '/api/games') return '/data/games.json';
-  let m = p.match(/^\/api\/games\/(\w+)$/);
-  if (m) return `/data/games/${m[1]}.json`;
-  m = p.match(/^\/api\/reviews\/(\w+)$/);
-  if (m) return `/data/reviews/${m[1]}.json`;
-  return null;
+let backend = null;
+async function browserBackend() {
+  if (!backend) {
+    const { createBackend } = await import('./dist/backend.js');
+    backend = createBackend({ base: new URL('./dist/', import.meta.url), demosUrl: new URL('./demos.json', import.meta.url) });
+  }
+  return backend;
 }
 
 async function api(path, opts) {
-  if (STATIC) {
-    const file = !opts?.method || opts.method === 'GET' ? staticPath(path) : null;
-    if (!file) throw new Error('Not available in the shared version');
-    const r = await fetch(file);
-    if (!r.ok) throw new Error(r.status === 404 || r.status === 403 ? 'Not found' : r.statusText);
-    const data = await r.json();
-    if (file === '/data/games.json') {
-      const tc = new URL(path, location.origin).searchParams.get('time_class');
-      return tc ? data.filter(g => g.time_class === tc) : data;
-    }
-    return data;
-  }
+  if (BROWSER) return (await browserBackend()).api(path, opts);
   const r = await fetch(path, opts);
   // The session ended (password changed or cookie gone): back to the sign-in page.
   if (r.status === 401) location.href = '/login';
@@ -204,9 +191,51 @@ route();
 function route() {
   cleanup();
   cleanup = () => {};
+  // The review fills the window: the footer would only get in the way.
+  document.body.classList.toggle('in-review', /^#\/game\//.test(location.hash));
   const m = location.hash.match(/^#\/game\/(\w+)(?:\/(\d+))?/);
   if (m) renderReview(m[1], m[2] ? Number(m[2]) : 0);
+  else if (location.hash === '#/about') renderAbout();
   else renderHome();
+}
+
+// ---------------------------------------------------------------- about
+
+const REPO = 'https://github.com/Tommaiberone/SmartChess';
+
+function renderAbout() {
+  const app = $('#app');
+  const section = (title, ...kids) => el('section', { class: 'card about' }, el('h2', {}, title), ...kids);
+  const ext = (href, label) => el('a', { href, target: '_blank', rel: 'noopener' }, label);
+  const clear = async () => {
+    if (!confirm('Delete the reviews and games saved in this browser?')) return;
+    try { localStorage.clear(); } catch { /* blocked */ }
+    try { indexedDB.deleteDatabase('smartchess'); await caches.delete('smartchess-models-v1'); } catch { /* nothing saved */ }
+    location.hash = '#/';
+    location.reload();
+  };
+  app.replaceChildren(
+    el('section', { class: 'hero' }, el('h1', {}, 'About SmartChess'),
+      el('p', { class: 'muted' }, 'A game review that asks what a player like you can actually play, not only what a computer would.')),
+    section('How it works',
+      el('p', {}, 'For each key moment of your game you get three moves. ', el('b', {}, 'Best'), ' is what Stockfish plays. ',
+        el('b', {}, 'Simplest'), ' is the move, within 0.6 pawns of the best, that you can keep up at your own level. ',
+        el('b', {}, 'Trickiest'), ' is the move, within 1 pawn, that scores best against a real opponent of their level.'),
+      el('p', {}, 'Stockfish is the objective judge. Maia-3, a neural network trained on millions of human games, predicts which moves players of a given rating actually play. A search combines the two, and every explanation is written from those numbers.'),
+      el('p', { class: 'muted small' }, 'This is a beta. The rating conversion from Chess.com to the Maia scale is approximate, and results come from a light version of the engines (Stockfish 19 lite, Maia-3 5M) so that they run in your browser.')),
+    section('Privacy',
+      el('p', {}, 'There is no account, no tracking and no cookie. The analysis runs on your device, in your browser: your games are downloaded from Chess.com or Lichess by your own browser and are never sent to this site or anywhere else.'),
+      el('p', {}, 'Reviews are saved only in this browser, so you do not wait twice. The first visit downloads about 37 MB of engine files, which are then cached.'),
+      el('button', { class: 'btn small', onclick: clear }, 'Delete everything saved in this browser')),
+    section('Open source',
+      el('p', {}, 'SmartChess is free software under the ', ext('https://www.gnu.org/licenses/agpl-3.0.html', 'GNU AGPL v3'), ': ',
+        ext(REPO, 'source code'), '. It is built on ', ext('https://stockfishchess.org', 'Stockfish'), ' (GPL-3.0, WebAssembly build by ',
+        ext('https://github.com/nmrugg/stockfish.js', 'stockfish.js'), '), ', ext('https://github.com/CSSLab/maia3', 'Maia-3'),
+        ' (AGPL-3.0), ', ext('https://github.com/lichess-org/chessops', 'chessops'), ', ', ext('https://github.com/lichess-org/chessground', 'Chessground'),
+        ' and ', ext('https://onnxruntime.ai', 'ONNX Runtime Web'), '.'),
+      el('p', { class: 'muted small' }, 'Not affiliated with Chess.com or Lichess.')),
+    el('p', {}, el('a', { class: 'btn', href: '#/' }, '← Back to games')),
+  );
 }
 
 // ---------------------------------------------------------------- home
@@ -214,36 +243,45 @@ function route() {
 async function renderHome() {
   const app = $('#app');
   const cfg = await api('/api/config').catch(() => ({}));
-  let user = STATIC ? cfg.username : store.get('user', '') || cfg.username || '';
+  let user = store.get('user', '') || cfg.username || '';
   let tc = store.get('tc', 'rapid');
+  let source = store.get('source', 'chess.com');
 
-  const input = el('input', { class: 'input', value: user, placeholder: 'Chess.com username', autocomplete: 'off', 'aria-label': 'Chess.com username' });
+  const input = el('input', { class: 'input', value: user, autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
   const list = el('div', { class: 'game-list' });
   const chips = el('div', { class: 'chips' });
+  const sources = el('div', { class: 'chips sources' });
   const TCS = [['rapid', 'Rapid'], ['blitz', 'Blitz'], ['bullet', 'Bullet'], ['daily', 'Daily'], ['', 'All']];
+  const SOURCES = [['chess.com', 'Chess.com'], ['lichess', 'Lichess']];
 
   function drawChips() {
     chips.replaceChildren(...TCS.map(([v, label]) =>
-      el('button', { class: 'chip' + (v === tc ? ' on' : ''), onclick: () => { tc = v; store.set('tc', v); drawChips(); load(); } }, label)));
+      el('button', { class: 'chip' + (v === tc ? ' on' : ''), type: 'button', onclick: () => { tc = v; store.set('tc', v); drawChips(); load(); } }, label)));
+    sources.replaceChildren(...SOURCES.map(([v, label]) =>
+      el('button', { class: 'chip' + (v === source ? ' on' : ''), type: 'button', onclick: () => { source = v; store.set('source', v); drawChips(); load(); } }, label)));
+    const label = `${source === 'lichess' ? 'Lichess' : 'Chess.com'} username`;
+    input.placeholder = label;
+    input.setAttribute('aria-label', label);
   }
 
   async function load() {
-    if (!STATIC) {
-      user = input.value.trim();
-      store.set('user', user);
-    }
-    if (!user) {
+    user = input.value.trim();
+    store.set('user', user);
+    // The public site has demo games to show before anyone types a name.
+    if (!user && !BROWSER) {
       list.replaceChildren(el('p', { class: 'muted' }, 'Enter your username to see your games.'));
       return;
     }
     list.replaceChildren(...[1, 2, 3, 4].map(() => el('div', { class: 'game-row skeleton' })));
     try {
-      const games = await api(`/api/games?user=${encodeURIComponent(user)}&time_class=${tc}`);
+      const games = await api(`/api/games?user=${encodeURIComponent(user)}&time_class=${tc}&source=${encodeURIComponent(source)}`);
       if (!games.length) {
         list.replaceChildren(el('p', { class: 'muted' }, 'No games found with this filter.'));
         return;
       }
-      list.replaceChildren(...games.map(gameRow));
+      const rows = games.map(gameRow);
+      if (!user) rows.push(el('p', { class: 'muted small' }, 'Enter your username above to review your own games.'));
+      list.replaceChildren(...rows);
     } catch (e) {
       list.replaceChildren(el('p', { class: 'error' }, e.message));
     }
@@ -253,22 +291,43 @@ async function renderHome() {
     el('span', { class: `pill ${role}` }, title), el('p', {}, text));
 
   drawChips();
-  const form = STATIC
-    ? el('h2', { class: 'list-title' }, `${user}'s games`)
-    : el('form', { class: 'user-form', onsubmit: e => { e.preventDefault(); load(); } },
-      input, el('button', { class: 'btn primary', type: 'submit' }, 'Load'));
+  const form = el('form', { class: 'user-form', onsubmit: e => { e.preventDefault(); load(); } },
+    input, el('button', { class: 'btn primary', type: 'submit' }, 'Load'));
   app.replaceChildren(
     el('section', { class: 'hero' },
-      el('h1', {}, STATIC ? 'Chess games, explained calmly' : 'Your games, explained calmly'),
-      el('p', { class: 'muted' }, 'Mistakes and practical choices, reviewed together: at every key moment you get three options.')),
+      el('h1', {}, 'Your games, explained calmly'),
+      el('p', { class: 'muted' }, 'Mistakes and practical choices, reviewed together: at every key moment you get three options.'),
+      BROWSER ? el('p', { class: 'muted small privacy-note' }, '🔒 The analysis runs on your device: your games never leave it.') : null),
     el('section', { class: 'how-grid' },
       how('best', 'Best', 'The strongest move according to Stockfish.'),
       how('simple', 'Simplest', 'Gives up at most 0.6 pawns to the best move, but is easy to follow up at your level.'),
       how('tricky', 'Trickiest', 'Gives up at most 1 pawn, in exchange for more chances for the opponent to go wrong.')),
-    el('section', { class: 'card' }, form, chips, list),
-    STATIC ? el('p', { class: 'muted tiny showcase-note' }, 'Shared version: the games were analysed locally with Stockfish and Maia-3, and the explanations are written from that data.') : null,
+    el('section', { class: 'card' }, BROWSER ? sources : null, form, chips, list),
+    BROWSER ? pgnPanel() : null,
   );
   load();
+}
+
+// A game from anywhere else: paste its PGN and say which side is you.
+function pgnPanel() {
+  const text = el('textarea', { class: 'input pgn', rows: '6', placeholder: 'Paste the PGN here: 1. e4 e5 2. Nf3 Nc6 …', 'aria-label': 'PGN' });
+  const side = el('select', { class: 'input', 'aria-label': 'Your side' },
+    el('option', { value: 'white' }, 'I played White'), el('option', { value: 'black' }, 'I played Black'));
+  const error = el('p', { class: 'error small', hidden: true });
+  const go = async e => {
+    e.preventDefault();
+    error.hidden = true;
+    try {
+      const { id } = await post('/api/pgn', { pgn: text.value, user_color: side.value });
+      location.hash = `#/game/${id}`;
+    } catch (err) {
+      error.textContent = err.message;
+      error.hidden = false;
+    }
+  };
+  return el('details', { class: 'card pgn-card' },
+    el('summary', {}, 'Have the game as a PGN? Paste it'),
+    el('form', { onsubmit: go }, text, el('div', { class: 'pgn-row' }, side, el('button', { class: 'btn primary', type: 'submit' }, 'Review this game')), error));
 }
 
 function gameRow(g) {
@@ -384,10 +443,9 @@ async function renderReview(id, startPly = 0) {
   // Only a game without a review starts one: any other failure is shown as is.
   let review = null;
   try {
-    review = await api(`/api/reviews/${id}`);
+    review = await api(`/api/reviews/${id}?user=${encodeURIComponent(S.user)}`);
   } catch (e) {
-    if (STATIC) S.job = { status: 'error', error: 'This game has not been reviewed.' };
-    else if (e.status === 404) runReviewJob();
+    if (e.status === 404) runReviewJob();
     else S.job = { status: 'error', error: e.message };
   }
   if (review) setReview(review);
@@ -937,7 +995,7 @@ function reviewProgress() {
   const job = S.job;
   if (job?.status === 'error') {
     return [coachHead('Something went wrong'), el('p', { class: 'error' }, job.error || 'Error'),
-      STATIC ? el('a', { class: 'btn', href: '#/' }, '← Back to games') : el('button', { class: 'btn', onclick: route }, 'Retry')];
+      el('button', { class: 'btn', onclick: route }, 'Retry')];
   }
   const msg = job?.message || 'Queued';
   const f = job?.fraction || 0;
@@ -1022,7 +1080,6 @@ function moveInfo() {
 }
 
 function analyseButton() {
-  if (STATIC) return el('p', { class: 'muted small' }, 'You can try variations by moving the pieces; live analysis is only available in the local version.');
   const key = currentHistory().join(' ');
   const pj = S.posJob?.key === key ? S.posJob.job : null;
   if (pj && pj.status !== 'done' && pj.status !== 'error') {
@@ -1104,9 +1161,9 @@ function optionsView(advice) {
   return out;
 }
 
-function narrationFooter(n, canRegenerate = !STATIC) {
+function narrationFooter(n, canRegenerate = !BROWSER) {
   const nj = S.narrJob;
-  const source = n.source === 'template' ? 'Automatic explanations (LLM unavailable)'
+  const source = n.source === 'template' ? (BROWSER ? 'Explanations written from the Stockfish and Maia data' : 'Automatic explanations (LLM unavailable)')
     : n.source ? `Explanations by ${n.source}, based on Stockfish and Maia data` : '';
   return el('div', { class: 'footnote muted tiny' },
     source,

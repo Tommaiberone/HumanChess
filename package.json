@@ -1,0 +1,22 @@
+{
+  "name": "smartchess-web",
+  "private": true,
+  "type": "module",
+  "description": "In-browser analysis (Stockfish WASM + Maia-3 ONNX) for SmartChess",
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "build": "node scripts/build_web.mjs",
+    "test": "node --test \"web-tests/*.test.js\""
+  },
+  "dependencies": {
+    "@lichess-org/chessground": "^10.4.2",
+    "chess.js": "^1.4.0",
+    "chessops": "0.15.1",
+    "onnxruntime-web": "1.30.0",
+    "stockfish": "19.0.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "playwright-core": "^1.64.1"
+  }
+}

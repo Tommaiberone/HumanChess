@@ -16,7 +16,7 @@ Stockfish is the objective oracle. [Maia-3](https://github.com/CSSLab/maia3) pre
 
 ## Setup
 
-Requires [uv](https://docs.astral.sh/uv/) and Python 3.12.
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.12, plus Node 22 for the web part (`npm install`).
 
 ```sh
 uv sync --python 3.12
@@ -27,8 +27,13 @@ Put a Stockfish binary under `engines/stockfish/`, or set `SMARTCHESS_STOCKFISH`
 ## Usage
 
 ```sh
-# Web app (Chess.com-like review, local): http://127.0.0.1:8765
+# Web app with the Python backend (Chess.com-like review, local): http://127.0.0.1:8765
 uv run smartchess web --user <chess.com username>
+
+# The public site, analysis in the browser: build it once, then serve the folder
+npm install && npm run build
+uv run --no-sync --with onnx --with onnxruntime python scripts/export_onnx.py maia3-5m models   # once
+uv run smartchess export --out site && python -m http.server -d site 8000
 
 # One position (you are the side to move); --moves keeps the history Maia uses
 uv run smartchess position --moves "e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 d5 exd5"
@@ -54,33 +59,35 @@ All values are win% from your point of view, using the Lichess conversion from c
 
 In both Maia modes, human nodes are weighted by Maia's probabilities, and the leaves are Stockfish evals. Opponent probability mass that the model leaves unexplored is assigned to the opponent's best reply, so the search never counts on mistakes it cannot see.
 
-## Sharing (read-only showcase)
+## The public site: analysis in the visitor's browser
 
-`smartchess export --user <name>` writes the reviewed games to `site/` as a static site. There the frontend runs in read-only mode: no backend, no live analysis, no API keys. `bash scripts/deploy.sh -auto-approve` exports the site and uploads it with Terraform (`infra/`) to a private S3 bucket behind CloudFront, using the `job-radar` AWS profile, then invalidates the cache. Set `TF_VAR_password` to protect the site with basic auth (user `smartchess`).
+Anyone can use SmartChess without a server doing the work. `smartchess export --out site` writes a static folder (HTML, JS, WebAssembly and the Maia-3 model) that any static host can serve; the visitor's own device runs the analysis:
 
-Demo games are hand-built records in `data/games/demo*.json` (with `"demo": true`, a `title`, an explicit `user_color` and optional `key_plies` that are always reviewed). They are listed first, both locally and in the shared site.
+- games come straight from the **Chess.com** and **Lichess** public APIs (both allow requests from any page), or from a pasted **PGN**;
+- **Stockfish 19 lite** (WebAssembly, single thread, `stockfish` on npm) and **Maia-3 5M** (ONNX on ONNX Runtime Web, `scripts/export_onnx.py`) run in a pool of Web Workers, 4 on a desktop and 2 on a phone. The search is the same expectimax as the Python one (`src/smartchess/web/analysis/`, a port of `practical.py`, `review.py`, `facts.py`, `motifs.py` and `explain.py` on top of [chessops](https://github.com/lichess-org/chessops));
+- reviews are kept in the browser (IndexedDB), nothing is uploaded, and there are no accounts, cookies or analytics;
+- explanations are the template ones (no LLM, so no API key to protect); the demo games keep their hand-written ones.
 
-## Live app on AWS Lambda
+Measured on this laptop, a 92-ply game takes about 1 minute with 4 workers (Node, same code), against 3.5 minutes on the Lambda below. The first visit downloads about 37 MB (model 21 MB, ONNX Runtime 14 MB, Stockfish 2 MB), then it is cached.
 
-The full app (live reviews included) also runs on AWS, so it works from a phone with no server to start. It uses only always-free services: Lambda (zip packages and a function URL), DynamoDB with provisioned capacity, and CloudWatch Logs. There is no ECR, S3 or API Gateway, which past an account's first year have no free tier. `infra/app/` is a separate Terraform stack from the showcase. Two functions share one zip package:
+Searches stop at a node count, never at a time limit, and every task starts from a clean engine: **the same game always gives the same review**, on any device. (The Python reviews depend on timing and on the order engines pick up positions: two runs of the same game agree on only about 60% of their key moments.)
 
-- `smartchess-api` (1 GB) serves the frontend and the API behind a public function URL. The app asks for a password on a sign-in page and keeps a session cookie. Basic auth is not an option there, because a function URL renames `WWW-Authenticate`; it still works for scripts (user `smartchess`). A cold start takes about 2 s.
-- `smartchess-worker` (3008 MB, about 2 vCPU, 15 min timeout) runs Stockfish and Maia-3. The API hands it every analysis with an asynchronous invoke, with no retries and a reserved concurrency of 2. The worker writes its progress to DynamoDB, and the frontend polls `/api/jobs/{id}` as it does locally.
+`web-tests/` checks the port against the Python code: `scripts/make_web_fixtures.py` records what Python says for 97 positions (every legal move with its SAN, motifs and threats, Maia probabilities) and `npm test` requires the same from JavaScript. `node web-tests/e2e.mjs` drives the exported site in Chromium.
 
-A zip package holds at most 250 MB, and torch alone takes about 700. So on Lambda, Maia-3 runs on numpy (`smartchess.maia_np`, checked against torch in `tests/test_maia_np.py`), with its weights in two layers. Stockfish 19 is downloaded from its GitHub release on a cold start and checked against its SHA-256. A 92-ply game takes about 3.5 minutes; a cold start adds about 7 s. 3008 MB is the account's memory limit for now; more memory would give more CPU and a faster review at about the same cost (`TF_VAR_worker_memory`).
+Deploy with `bash scripts/deploy.sh -auto-approve` (private S3 bucket behind CloudFront, `infra/`). Set `TF_VAR_password` to keep the site behind basic auth until it is public. The footer links to the source code, as the AGPL requires for a service built on Maia-3.
 
-Games, reviews and jobs are JSON documents (`smartchess.web.store`): files under `data/` locally, zlib-compressed DynamoDB items on Lambda. Jobs expire through a TTL. `bash scripts/deploy_app.sh -auto-approve` does the following:
+## Private server mode: AWS Lambda
 
-1. Exports the Maia-3 weights once (`scripts/export_maia.py`, with torch).
-2. Builds the zips (`scripts/build_lambda.py`, Linux wheels installed by uv, no Docker).
-3. Applies Terraform, which uploads a zip only when its hash changes.
-4. Copies to DynamoDB the local demo games, plus any local reviews the table lacks.
+Before the browser version, the app ran on AWS Lambda (`infra/app/`, `scripts/deploy_app.sh`). It still works, as a private instance with a sign-in page, and it is the only way to get the Groq explanations. It is not meant for the public: every review costs server time, so it needs quotas to be exposed. It uses only always-free services: Lambda (zip packages and a function URL), DynamoDB with provisioned capacity and CloudWatch Logs. Two functions share one zip package:
 
-The Groq key is read from `.env`. The password is generated unless `TF_VAR_app_password` is set, and `terraform -chdir=infra/app output -raw password` prints it.
+- `smartchess-api` (1 GB) serves the frontend and the API behind a function URL, with a password on a sign-in page and a session cookie. A cold start takes about 2 s.
+- `smartchess-worker` (3008 MB, about 2 vCPU, 15 min timeout) runs Stockfish and Maia-3. The API hands it every analysis with an asynchronous invoke; the worker writes its progress to DynamoDB and the frontend polls `/api/jobs/{id}`.
+
+A zip package holds at most 250 MB, so on Lambda Maia-3 runs on numpy (`smartchess.maia_np`, checked against torch in `tests/test_maia_np.py`) and Stockfish is downloaded from its GitHub release on a cold start. A 92-ply game takes about 3.5 minutes. Games, reviews and jobs are JSON documents (`smartchess.web.store`): files under `data/` locally, zlib-compressed DynamoDB items on Lambda. `bash scripts/deploy_app.sh -auto-approve` exports the Maia weights, builds the zips (`scripts/build_lambda.py`, which leaves the browser analysis out), applies Terraform and copies the demo games to DynamoDB. The password is generated unless `TF_VAR_app_password` is set (`terraform -chdir=infra/app output -raw password`).
 
 ## Explanations
 
-Explanations are built from facts: candidate lines, traps, critical moments, and simple motifs such as captures, checks and attacks on undefended pieces. When `GROQ_API_KEY` is set (in the environment or in `.env`), an LLM on Groq rewrites these facts as friendly prose. It uses `qwen3.8-27b` and falls back to `gpt-oss-120b`; when both are rate limited it waits instead of switching to a weaker model. Any piece move the LLM mentions that is not in the facts makes the answer rejected, and the template text is used instead.
+Explanations are built from facts: candidate lines, traps, critical moments, and simple motifs such as captures, checks and attacks on undefended pieces. In the Python app, when `GROQ_API_KEY` is set (in the environment or in `.env`), an LLM on Groq rewrites these facts as friendly prose. It uses `qwen3.8-27b` and falls back to `gpt-oss-120b`; when both are rate limited it waits instead of switching to a weaker model. Any piece move the LLM mentions that is not in the facts makes the answer rejected, and the template text is used instead.
 
 ## License
 

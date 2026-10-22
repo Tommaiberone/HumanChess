@@ -444,3 +444,18 @@ body:has(.review) .topbar { max-width: none; padding-left: 28px; padding-right: 
 .tag.demo { background: var(--choice-bg); color: var(--choice); margin: 0 8px 0 0; text-transform: uppercase; letter-spacing: .04em; }
 .demo-title { font-weight: 800; font-size: 15px; display: flex; align-items: center; margin-bottom: 2px; }
 .game-row.demo { border-color: var(--choice-bg); }
+
+/* ---------- public site: sources, pasted PGN, about, footer */
+.chips.sources { margin: 0 0 12px; }
+.privacy-note { margin: 10px 0 0; }
+.pgn-card { margin-top: 16px; }
+.pgn-card summary { cursor: pointer; font-weight: 700; color: var(--muted); }
+.pgn-card form { display: grid; gap: 10px; margin-top: 12px; }
+textarea.input.pgn { font: 13px/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace; resize: vertical; width: 100%; }
+.pgn-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.about { margin-top: 16px; max-width: 760px; }
+.about h2 { font-size: 20px; margin-bottom: 8px; }
+.about p { margin: 8px 0; }
+.site-footer { max-width: 1240px; margin: 0 auto; padding: 0 16px 36px; color: var(--muted); font-size: 13px; }
+.site-footer a { text-decoration: underline; text-underline-offset: 2px; }
+body.in-review .site-footer { display: none; }

@@ -66,9 +66,21 @@ def build_deps(work: Path) -> Path:
     return target.parent
 
 
+def _skip(directory: str, names: list[str]) -> set[str]:
+    """Leave out what the API never serves: the browser analysis (engines, model, worker
+    bundles, JS sources) lives on the static site and would not fit a Lambda response."""
+    path = Path(directory)
+    skipped = {n for n in names if n == "__pycache__"}
+    if path.name == "web":
+        skipped |= {"analysis"} & set(names)
+    if path.name == "dist":
+        skipped |= {"models", "ort", "stockfish", "backend.js", "analysis.worker.js"} & set(names)
+    return skipped
+
+
 def build_app(work: Path) -> Path:
     src = work / "app"
-    shutil.copytree(ROOT / "src" / "smartchess", src / "smartchess", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(ROOT / "src" / "smartchess", src / "smartchess", ignore=_skip)
     compile_tree(src)
     return src
 

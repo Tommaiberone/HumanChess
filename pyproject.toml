@@ -33,6 +33,8 @@ smartchess = "smartchess.cli:main"
 
 [dependency-groups]
 dev = ["pytest>=8"]
+# scripts/export_onnx.py: the Maia-3 models for the in-browser analysis.
+onnx = ["onnx>=1.16", "onnxruntime>=1.18"]
 # The AWS Lambda package (scripts/build_lambda.py): no torch or maia3, Maia-3 runs on
 # numpy there, and boto3 comes with the Lambda runtime.
 lambda = ["chess>=1.11", "fastapi>=0.110", "mangum>=0.17", "numpy>=2.0", "requests>=2.31"]

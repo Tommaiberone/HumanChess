@@ -23,3 +23,6 @@ site/
 *.tfstate
 *.tfstate.backup
 *.log
+
+node_modules/
+src/smartchess/web/static/dist/

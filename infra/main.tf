@@ -10,16 +10,25 @@ locals {
   site_dir  = var.site_dir != "" ? var.site_dir : "${path.module}/../site"
   protected = var.password != ""
   content_types = {
-    html = "text/html; charset=utf-8"
-    js   = "text/javascript; charset=utf-8"
-    css  = "text/css; charset=utf-8"
-    json = "application/json; charset=utf-8"
-    svg  = "image/svg+xml"
-    png  = "image/png"
-    ico  = "image/x-icon"
+    html  = "text/html; charset=utf-8"
+    js    = "text/javascript; charset=utf-8"
+    css   = "text/css; charset=utf-8"
+    json  = "application/json; charset=utf-8"
+    svg   = "image/svg+xml"
+    png   = "image/png"
+    ico   = "image/x-icon"
+    wasm  = "application/wasm"
+    mjs   = "text/javascript; charset=utf-8"
+    woff2 = "font/woff2"
+    onnx  = "application/octet-stream"
   }
+  # The big engine files never change under the same name: let browsers keep them a week.
+  long_cache = toset(["wasm", "onnx", "woff2"])
   # AWS managed cache policy "CachingOptimized" (honours the objects' Cache-Control)
   cache_optimized = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+  # AWS managed response headers policy "SecurityHeadersPolicy": HSTS, nosniff,
+  # X-Frame-Options DENY, Referrer-Policy. The CSP is a <meta> tag of index.html.
+  security_headers = "67f7725c-6f97-4210-82d7-5512b31e9d03"
 }
 
 resource "aws_s3_bucket" "site" {
@@ -42,7 +51,7 @@ resource "aws_s3_object" "site" {
   etag         = filemd5("${local.site_dir}/${each.value}")
   content_type = lookup(local.content_types, reverse(split(".", each.value))[0], "application/octet-stream")
   # File names carry no hash, so keep caches short; deploy.sh also invalidates.
-  cache_control = each.value == "index.html" ? "no-cache" : "public, max-age=300"
+  cache_control = each.value == "index.html" ? "no-cache" : contains(local.long_cache, reverse(split(".", each.value))[0]) ? "public, max-age=604800" : "public, max-age=300"
 }
 
 resource "aws_cloudfront_origin_access_control" "site" {
@@ -88,12 +97,13 @@ resource "aws_cloudfront_distribution" "site" {
   }
 
   default_cache_behavior {
-    target_origin_id       = "site"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD"]
-    cached_methods         = ["GET", "HEAD"]
-    cache_policy_id        = local.cache_optimized
-    compress               = true
+    target_origin_id           = "site"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD"]
+    cached_methods             = ["GET", "HEAD"]
+    cache_policy_id            = local.cache_optimized
+    response_headers_policy_id = local.security_headers
+    compress                   = true
 
     dynamic "function_association" {
       for_each = local.protected ? [1] : []

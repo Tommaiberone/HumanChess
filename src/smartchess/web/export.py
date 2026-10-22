@@ -1,8 +1,10 @@
-"""Static "showcase" export: the reviewed games as a site that needs no backend.
+"""The public site: a static folder that needs no backend.
 
-The frontend switches to read-only mode when index.html carries
-<meta name="smartchess-mode" content="static">: it reads data/*.json instead of
-the API and hides live analysis. Nothing secret is exported.
+index.html carries <meta name="smartchess-mode" content="browser">, so the frontend
+fetches games from Chess.com or Lichess itself and runs Stockfish and Maia in the
+visitor's browser (static/dist, built by `npm run build`). The only data shipped
+besides the app is the demo games, hand-built records in data/games/demo*.json with
+their reviews, listed first for every visitor.
 """
 
 from __future__ import annotations
@@ -11,42 +13,47 @@ import json
 import shutil
 from pathlib import Path
 
-from ..importers import chesscom_summary
-from .service import STATIC_DIR, Service
+from ..engine import PROJECT_ROOT
+from .service import STATIC_DIR
+from .store import LocalStore
+
+MODE_META = '<meta name="smartchess-mode" content="browser">'
+# Scripts, workers, fonts and styles only from this site; the page may fetch games from
+# Chess.com and Lichess and nothing else. 'wasm-unsafe-eval' lets WebAssembly compile.
+CSP = (
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.chess.com https://lichess.org; "
+    "worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'"
+)
+HEAD_META = f'''{MODE_META}
+  <meta http-equiv="Content-Security-Policy" content="{CSP}">
+  <meta name="referrer" content="no-referrer">'''
 
 
-def export_site(service: Service, out: Path, username: str) -> list[str]:
-    """Write the site to `out` and return the ids of the exported games."""
+def demos(data: Path) -> list[dict]:
+    store = LocalStore(data)
+    out = []
+    for key in store.keys("games/demo"):
+        game = store.read(key)
+        review = store.read("reviews/" + key.removeprefix("games/"))
+        if game and review:
+            out.append({"game": game, "review": review})
+    return out
+
+
+def export_site(out: Path, data: Path | None = None) -> list[str]:
+    """Write the site to `out` and return the ids of its demo games."""
+    if not (STATIC_DIR / "dist" / "backend.js").exists():
+        raise SystemExit("The browser bundles are missing: run `npm install && npm run build` first")
     if out.exists():
         shutil.rmtree(out)
-    (out / "data" / "games").mkdir(parents=True)
-    (out / "data" / "reviews").mkdir(parents=True)
-    shutil.copytree(STATIC_DIR, out / "static", ignore=shutil.ignore_patterns("login.html"))
+    shutil.copytree(STATIC_DIR, out / "static", ignore=shutil.ignore_patterns("login.html", "index.html", "demos.json"))
 
     index = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    index = index.replace("<meta charset=\"utf-8\">", "<meta charset=\"utf-8\">\n  <meta name=\"smartchess-mode\" content=\"static\">", 1)
+    index = index.replace('<meta charset="utf-8">', f'<meta charset="utf-8">\n  {HEAD_META}', 1)
     (out / "index.html").write_text(index, encoding="utf-8")
-    (out / "static" / "index.html").unlink()
+    (out / ".nojekyll").write_text("", encoding="utf-8")  # GitHub Pages: serve every file as it is
 
-    games = []
-    for game_id in service.reviewed_ids():
-        try:
-            raw = service._raw_game(game_id)
-        except KeyError:
-            continue
-        summary = chesscom_summary(raw, username)
-        summary["review"] = service._review_brief(game_id)
-        games.append(summary)
-        moves = service.game_moves(game_id, username)
-        _write(out / "data" / "games" / f"{game_id}.json", moves)
-        _write(out / "data" / "reviews" / f"{game_id}.json", service.cached_review(game_id))
-
-    # Demo games first, then the real ones from the newest.
-    games.sort(key=lambda g: (g.get("demo", False), g.get("end_time") or 0), reverse=True)
-    _write(out / "data" / "games.json", games)
-    _write(out / "data" / "config.json", {"username": username, "static": True})
-    return [g["id"] for g in games]
-
-
-def _write(path: Path, data) -> None:
-    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    shown = demos(data or PROJECT_ROOT / "data")
+    (out / "static" / "demos.json").write_text(json.dumps(shown, ensure_ascii=False), encoding="utf-8")
+    return [d["game"].get("id", "") for d in shown]
