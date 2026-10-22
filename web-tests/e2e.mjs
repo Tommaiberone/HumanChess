@@ -70,6 +70,16 @@ await page.waitForTimeout(500);
 await page.locator('.game-row.demo').first().click();
 await page.waitForSelector('.moment-row, .options', { timeout: 15000 });
 console.log('demo review shown:', await page.locator('.moment-row').count(), 'key moments');
+// "Rewrite with AI" goes through the explanation proxy (only when the site has one).
+await page.locator('.moment-row').first().click();
+await page.waitForSelector('.footnote');
+if (await page.locator('.footnote button', { hasText: 'rewrite with AI' }).count()) {
+  await page.locator('.footnote button', { hasText: 'rewrite with AI' }).first().click();
+  await page.waitForFunction(() => /Explanations by/.test(document.querySelector('.footnote')?.innerText ?? ''), null, { timeout: 90000 });
+  console.log('AI explanations:', (await page.locator('.footnote').first().innerText()).replace(/\s+/g, ' ').slice(0, 120));
+} else {
+  console.log('AI explanations: no proxy configured');
+}
 await page.goBack();
 
 // A pasted PGN is analysed in the browser.
