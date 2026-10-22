@@ -24,7 +24,8 @@ def test_margin_allows_more_pawns_when_winning():
 def test_format_cp():
     assert format_cp(85) == "+0.85"
     assert format_cp(-120) == "-1.20"
-    assert format_cp(MATE_CP - 3) == "#2"
+    # Stockfish reports the distance to mate in moves ("score mate 3"), and so does the score.
+    assert format_cp(MATE_CP - 3) == "#3"
     assert format_cp(-(MATE_CP - 1)) == "#-1"
 
 

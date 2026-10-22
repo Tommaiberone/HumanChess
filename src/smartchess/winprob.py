@@ -34,7 +34,7 @@ def margin_win(margin_cp: float) -> float:
 def format_cp(cp: float) -> str:
     """Human-readable eval, e.g. '+0.85', '-1.20', '#5', '#-3'."""
     if abs(cp) >= MATE_CP - 500:
-        plies = MATE_CP - abs(cp)
-        moves = max(1, math.ceil(plies / 2))
+        # Stockfish counts the distance to mate in moves, and so does this score.
+        moves = max(1, MATE_CP - abs(cp))
         return f"#{moves}" if cp > 0 else f"#-{moves}"
     return f"{cp / 100:+.2f}"

@@ -30,8 +30,8 @@ def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--margin", type=float, default=60, help="centipawns the simple move may give up (balanced position)")
     p.add_argument("--tricky-margin", type=float, default=100, help="centipawns the tricky move may give up")
     p.add_argument("--model", default="maia3-23m", help="Maia-3 model (maia3-5m, maia3-23m, maia3-79m)")
-    p.add_argument("--threads", type=int, default=12, help="Stockfish threads in total")
-    p.add_argument("--workers", type=int, default=3, help="Stockfish instances analysing in parallel")
+    p.add_argument("--threads", type=int, default=4, help="Stockfish threads in total")
+    p.add_argument("--workers", type=int, default=4, help="Stockfish instances analysing in parallel")
     p.add_argument("--depth", type=int, default=12, help="Stockfish depth inside the practical search")
     p.add_argument("--root-depth", type=int, default=18, help="Stockfish depth for candidate moves")
     p.add_argument("--llm", action="store_true", help="explain with Groq instead of templates")
@@ -168,9 +168,9 @@ def main(argv=None) -> int:
     _add_common(web)
     web.set_defaults(func=cmd_web)
 
-    exp = sub.add_parser("export", help="write the reviewed games as a static site (read-only showcase)")
-    exp.add_argument("--user", required=True, help="Chess.com username the reviews belong to")
+    exp = sub.add_parser("export", help="write the public site (analysis runs in the visitor's browser)")
     exp.add_argument("--out", default="site")
+    exp.add_argument("--data", help="folder with the demo games (default: data/)")
     exp.set_defaults(func=cmd_export)
 
     args = parser.parse_args(argv)
@@ -179,14 +179,9 @@ def main(argv=None) -> int:
 
 def cmd_export(args) -> int:
     from .web.export import export_site
-    from .web.service import Service
 
-    service = Service()
-    try:
-        ids = export_site(service, Path(args.out), args.user)
-    finally:
-        service.close()
-    print(f"Exported {len(ids)} games to {Path(args.out).resolve()}")
+    ids = export_site(Path(args.out), Path(args.data) if args.data else None)
+    print(f"Exported the site with {len(ids)} demo games to {Path(args.out).resolve()}")
     return 0
 
 

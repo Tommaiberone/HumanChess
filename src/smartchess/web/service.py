@@ -60,8 +60,8 @@ class Service:
     # Builds the human move model; None loads Maia-3 with torch (AWS passes the numpy one).
     human_model: Callable[[], object] | None = None
     model: str = "maia3-23m"
-    threads: int = 12  # Stockfish threads in total, split across the workers
-    workers: int = 3  # Stockfish instances analysing positions in parallel
+    threads: int = 4  # Stockfish threads in total, split across the workers (1 each: measured 2.7x faster than 3 engines x 4 threads)
+    workers: int = 4  # Stockfish instances analysing positions in parallel
     depth: int = 12
     settings: Settings = field(default_factory=Settings)
 
