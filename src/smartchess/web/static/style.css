@@ -581,3 +581,6 @@ body.compact-review main { padding: 0; }
   #app.home .game-title { font-size: 14px; }
   #app.home .game-sub { font-size: 12px; }
 }
+.review.compact .footnote { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; }
+.review.compact .footnote .src { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.review.compact .footnote button { flex: none; }

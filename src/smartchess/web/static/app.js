@@ -1209,7 +1209,7 @@ function narrationFooter(n, canRegenerate = !BROWSER || !!LLM_URL) {
   const source = n.source === 'template' ? (BROWSER ? 'Explanations written from the Stockfish and Maia data' : 'Automatic explanations (LLM unavailable)')
     : n.source ? `Explanations by ${n.source}, based on Stockfish and Maia data` : '';
   return el('div', { class: 'footnote muted tiny' },
-    source,
+    el('span', { class: 'src' }, source),
     canRegenerate && nj && nj.status !== 'error'
       ? el('span', {}, ' · ', spinner(), ` ${nj.message || 'rewriting…'}`)
       : canRegenerate ? el('button', {
