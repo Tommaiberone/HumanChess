@@ -25,12 +25,14 @@ function el(tag, props = {}, ...kids) {
 // Chess.com or Lichess, and Stockfish and Maia run in this page's own workers
 // (static/dist, built by `npm run build`). "server" mode talks to the Python API.
 const BROWSER = document.querySelector('meta[name="smartchess-mode"]')?.content === 'browser';
+// The explanation proxy (infra/app, llm_lambda.py): without it the browser version has only template explanations.
+const LLM_URL = document.querySelector('meta[name="smartchess-llm"]')?.content || '';
 
 let backend = null;
 async function browserBackend() {
   if (!backend) {
     const { createBackend } = await import('./dist/backend.js');
-    backend = createBackend({ base: new URL('./dist/', import.meta.url), demosUrl: new URL('./demos.json', import.meta.url) });
+    backend = createBackend({ base: new URL('./dist/', import.meta.url), demosUrl: new URL('./demos.json', import.meta.url), llmUrl: LLM_URL });
   }
   return backend;
 }
@@ -226,6 +228,7 @@ function renderAbout() {
     section('Privacy',
       el('p', {}, 'There is no account, no tracking and no cookie. The analysis runs on your device, in your browser: your games are downloaded from Chess.com or Lichess by your own browser and are never sent to this site or anywhere else.'),
       el('p', {}, 'Reviews are saved only in this browser, so you do not wait twice. The first visit downloads about 37 MB of engine files, which are then cached.'),
+      LLM_URL ? el('p', {}, 'The one exception is optional: if you press "rewrite with AI" under a review, the facts of each key moment (the position, the moves, the evaluations; no names, no account) are sent to a small proxy of this site and from there to Groq, which writes the explanations in prose. Nothing is sent unless you press it.') : null,
       el('button', { class: 'btn small', onclick: clear }, 'Delete everything saved in this browser')),
     section('Open source',
       el('p', {}, 'SmartChess is free software under the ', ext('https://www.gnu.org/licenses/agpl-3.0.html', 'GNU AGPL v3'), ': ',
@@ -1161,7 +1164,7 @@ function optionsView(advice) {
   return out;
 }
 
-function narrationFooter(n, canRegenerate = !BROWSER) {
+function narrationFooter(n, canRegenerate = !BROWSER || !!LLM_URL) {
   const nj = S.narrJob;
   const source = n.source === 'template' ? (BROWSER ? 'Explanations written from the Stockfish and Maia data' : 'Automatic explanations (LLM unavailable)')
     : n.source ? `Explanations by ${n.source}, based on Stockfish and Maia data` : '';
@@ -1169,7 +1172,10 @@ function narrationFooter(n, canRegenerate = !BROWSER) {
     source,
     canRegenerate && nj && nj.status !== 'error'
       ? el('span', {}, ' · ', spinner(), ` ${nj.message || 'rewriting…'}`)
-      : canRegenerate ? el('button', { class: 'link tiny', onclick: runNarrationJob }, ' · rewrite the explanations') : null,
+      : canRegenerate ? el('button', {
+        class: 'link tiny', onclick: runNarrationJob,
+        title: BROWSER ? 'Sends the facts of each key moment (positions, moves, evaluations; no names) to an AI service' : null,
+      }, BROWSER ? ' · rewrite with AI' : ' · rewrite the explanations') : null,
     nj?.status === 'error' ? el('span', { class: 'error' }, ` ${nj.error}`) : null);
 }
 

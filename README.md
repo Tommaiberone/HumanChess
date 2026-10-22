@@ -66,13 +66,15 @@ Anyone can use SmartChess without a server doing the work. `smartchess export --
 - games come straight from the **Chess.com** and **Lichess** public APIs (both allow requests from any page), or from a pasted **PGN**;
 - **Stockfish 19 lite** (WebAssembly, single thread, `stockfish` on npm) and **Maia-3 5M** (ONNX on ONNX Runtime Web, `scripts/export_onnx.py`) run in a pool of Web Workers, 4 on a desktop and 2 on a phone. The search is the same expectimax as the Python one (`src/smartchess/web/analysis/`, a port of `practical.py`, `review.py`, `facts.py`, `motifs.py` and `explain.py` on top of [chessops](https://github.com/lichess-org/chessops));
 - reviews are kept in the browser (IndexedDB), nothing is uploaded, and there are no accounts, cookies or analytics;
-- explanations are the template ones (no LLM, so no API key to protect); the demo games keep their hand-written ones.
+- explanations are the template ones by default; "rewrite with AI" under a review sends the facts of each key moment (no names) to an explanation proxy that holds the Groq key (below). The demo games keep their hand-written ones.
 
 Measured on this laptop, a 92-ply game takes about 1 minute with 4 workers (Node, same code), against 3.5 minutes on the Lambda below. The first visit downloads about 37 MB (model 21 MB, ONNX Runtime 14 MB, Stockfish 2 MB), then it is cached.
 
 Searches stop at a node count, never at a time limit, and every task starts from a clean engine: **the same game always gives the same review**, on any device. (The Python reviews depend on timing and on the order engines pick up positions: two runs of the same game agree on only about 60% of their key moments.)
 
 `web-tests/` checks the port against the Python code: `scripts/make_web_fixtures.py` records what Python says for 97 positions (every legal move with its SAN, motifs and threats, Maia probabilities) and `npm test` requires the same from JavaScript. `node web-tests/e2e.mjs` drives the exported site in Chromium.
+
+**Explanation proxy** (`src/smartchess/web/llm_lambda.py`, `infra/app/`, free tier): a Lambda with a function URL whose CORS allows only the site. It accepts just the shape the analysis produces, with bounded sizes (it cannot be used as a free chat), limits each visitor (hashed IP, 40 requests per hour) and the whole site (1,500 per day) with DynamoDB counters, and keeps the key in its environment. `smartchess.llm` rejects any answer that mentions a move not in the facts, and past a limit or an error the site keeps its template text. Apply it with `bash scripts/deploy_app.sh -auto-approve`; `scripts/deploy.sh` then reads its URL (`terraform -chdir=infra/app output -raw llm_url`) and adds it to the site's CSP.
 
 Deploy with `bash scripts/deploy.sh -auto-approve` (private S3 bucket behind CloudFront, `infra/`). Set `TF_VAR_password` to keep the site behind basic auth until it is public. The footer links to the source code, as the AGPL requires for a service built on Maia-3.
 

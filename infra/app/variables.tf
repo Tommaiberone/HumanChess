@@ -63,3 +63,21 @@ variable "write_capacity" {
   type    = number
   default = 5
 }
+
+variable "site_origin" {
+  description = "Origin of the public site (https://host, no path): the only page allowed to call the explanation proxy."
+  type        = string
+  default     = "https://d10viis4vhdzq8.cloudfront.net"
+}
+
+variable "llm_per_ip_hour" {
+  description = "Explanation requests one visitor may make per hour (a review is about 10)."
+  type        = number
+  default     = 40
+}
+
+variable "llm_per_day" {
+  description = "Explanation requests the proxy answers per day, whoever asks: keeps the Groq free quota from running out."
+  type        = number
+  default     = 1500
+}

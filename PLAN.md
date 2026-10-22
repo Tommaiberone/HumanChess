@@ -30,7 +30,7 @@ User: 1400 rapid on Chess.com, about 1700 on the Maia scale (Lichess blitz).
   - [x] Static showcase on S3 + CloudFront (`scripts/deploy.sh`): https://d10viis4vhdzq8.cloudfront.net/
   - [x] Stockfish (WASM) and Maia-3 (ONNX) in the browser (`src/smartchess/web/analysis/`): the public site needs no backend. Chess.com and Lichess import, pasted PGN, reviews kept in IndexedDB. The JS port is tested against Python fixtures and gives reproducible reviews.
   - [ ] Validate the Lichess import end to end (its export answered 404 for every account from the development network).
-  - [ ] Explanations with an LLM on the public site: needs a small proxy that keeps the key and limits requests.
+  - [x] Explanations with an LLM on the public site: opt-in "rewrite with AI" through a Lambda proxy that keeps the Groq key, validates the facts and limits requests (`llm_lambda.py`).
   - [ ] Share a review by link (needs a tiny store; the review JSON is about 15 KB compressed).
 - [x] **6. Performance**: pool of 3 Stockfish instances in parallel (reviews about 2.3x faster: 309 s → 132 s).
   - [ ] Batched Maia inference per node.

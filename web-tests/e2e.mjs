@@ -27,7 +27,7 @@ const server = createServer((req, res) => {
     res.writeHead(404).end('not found');
   }
 }).listen(0);
-const base = `http://127.0.0.1:${server.address().port}/`;
+const base = process.env.SITE_URL ?? `http://127.0.0.1:${server.address().port}/`;
 
 const browser = await chromium.launch({ executablePath: chrome, headless: true });
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });

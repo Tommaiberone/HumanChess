@@ -98,6 +98,24 @@ resource "aws_iam_role" "worker" {
   assume_role_policy = data.aws_iam_policy_document.assume.json
 }
 
+# The explanation proxy only bumps its rate-limit counters.
+data "aws_iam_policy_document" "llm" {
+  statement {
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [aws_dynamodb_table.data.arn]
+  }
+}
+
+resource "aws_iam_role" "llm" {
+  name               = "${local.prefix}-llm"
+  assume_role_policy = data.aws_iam_policy_document.assume.json
+}
+
+resource "aws_iam_role_policy" "llm" {
+  role   = aws_iam_role.llm.id
+  policy = data.aws_iam_policy_document.llm.json
+}
+
 resource "aws_iam_role" "api" {
   name               = "${local.prefix}-api"
   assume_role_policy = data.aws_iam_policy_document.assume.json
@@ -114,13 +132,13 @@ resource "aws_iam_role_policy" "api" {
 }
 
 resource "aws_iam_role_policy_attachment" "logs" {
-  for_each   = { worker = aws_iam_role.worker.name, api = aws_iam_role.api.name }
+  for_each   = { worker = aws_iam_role.worker.name, api = aws_iam_role.api.name, llm = aws_iam_role.llm.name }
   role       = each.value
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
 resource "aws_cloudwatch_log_group" "fn" {
-  for_each          = toset(["worker", "api"])
+  for_each          = toset(["worker", "api", "llm"])
   name              = "/aws/lambda/${local.prefix}-${each.key}"
   retention_in_days = 14
 }
@@ -203,6 +221,65 @@ resource "aws_lambda_permission" "url_invoke" {
   statement_id             = "FunctionUrlAllowInvokeAction"
   action                   = "lambda:InvokeFunction"
   function_name            = aws_lambda_function.api.function_name
+  principal                = "*"
+  invoked_via_function_url = true
+}
+
+# -- explanation proxy for the public site -----------------------------------------
+# The public site runs in the visitor's browser and cannot hold the Groq key: this function
+# does (src/smartchess/web/llm_lambda.py). Free tier: Lambda requests, a function URL and a
+# few DynamoDB counter writes. No reserved concurrency: the account's quota is small and the
+# daily counter is the cap.
+
+resource "aws_lambda_function" "llm" {
+  function_name    = "${local.prefix}-llm"
+  role             = aws_iam_role.llm.arn
+  runtime          = "python3.12"
+  handler          = "smartchess.web.llm_lambda.handler"
+  filename         = "${local.build}/app.zip"
+  source_code_hash = filebase64sha256("${local.build}/app.zip")
+  layers           = [aws_lambda_layer_version.deps.arn]
+  architectures    = ["x86_64"]
+  memory_size      = 256
+  timeout          = 30
+
+  environment {
+    variables = {
+      SMARTCHESS_TABLE = aws_dynamodb_table.data.name
+      GROQ_API_KEY     = var.groq_api_key
+      ALLOWED_ORIGIN   = var.site_origin
+      LLM_PER_IP_HOUR  = var.llm_per_ip_hour
+      LLM_PER_DAY      = var.llm_per_day
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.fn, aws_iam_role_policy_attachment.logs]
+}
+
+resource "aws_lambda_function_url" "llm" {
+  function_name      = aws_lambda_function.llm.function_name
+  authorization_type = "NONE"
+
+  cors {
+    allow_origins = [var.site_origin]
+    allow_methods = ["POST"]
+    allow_headers = ["content-type"]
+    max_age       = 3600
+  }
+}
+
+resource "aws_lambda_permission" "llm_url" {
+  statement_id           = "FunctionUrlAllowPublicAccess"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.llm.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}
+
+resource "aws_lambda_permission" "llm_invoke" {
+  statement_id             = "FunctionUrlAllowInvokeAction"
+  action                   = "lambda:InvokeFunction"
+  function_name            = aws_lambda_function.llm.function_name
   principal                = "*"
   invoked_via_function_url = true
 }

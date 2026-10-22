@@ -19,14 +19,24 @@ from .store import LocalStore
 
 MODE_META = '<meta name="smartchess-mode" content="browser">'
 # Scripts, workers, fonts and styles only from this site; the page may fetch games from
-# Chess.com and Lichess and nothing else. 'wasm-unsafe-eval' lets WebAssembly compile.
-CSP = (
-    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.chess.com https://lichess.org; "
-    "worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'"
-)
-HEAD_META = f'''{MODE_META}
-  <meta http-equiv="Content-Security-Policy" content="{CSP}">
+# Chess.com and Lichess and, if configured, ask the explanation proxy (llm_lambda.py).
+# 'wasm-unsafe-eval' lets WebAssembly compile.
+
+
+def head_meta(llm_url: str = "") -> str:
+    """The <meta> tags of the public index: mode, CSP, referrer, and the explanation proxy if any."""
+    connect = "'self' https://api.chess.com https://lichess.org"
+    extra = ""
+    if llm_url:
+        connect += " " + llm_url.rstrip("/")
+        extra = f'\n  <meta name="smartchess-llm" content="{llm_url}">'
+    csp = (
+        f"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; "
+        f"img-src 'self' data:; font-src 'self'; connect-src {connect}; "
+        "worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'"
+    )
+    return f'''{MODE_META}{extra}
+  <meta http-equiv="Content-Security-Policy" content="{csp}">
   <meta name="referrer" content="no-referrer">'''
 
 
@@ -41,7 +51,7 @@ def demos(data: Path) -> list[dict]:
     return out
 
 
-def export_site(out: Path, data: Path | None = None) -> list[str]:
+def export_site(out: Path, data: Path | None = None, llm_url: str = "") -> list[str]:
     """Write the site to `out` and return the ids of its demo games."""
     if not (STATIC_DIR / "dist" / "backend.js").exists():
         raise SystemExit("The browser bundles are missing: run `npm install && npm run build` first")

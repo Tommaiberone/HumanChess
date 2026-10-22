@@ -11,3 +11,8 @@ output "password" {
 output "table" {
   value = aws_dynamodb_table.data.name
 }
+
+output "llm_url" {
+  description = "Explanation proxy for the public site (scripts/deploy.sh passes it to the export)."
+  value       = aws_lambda_function_url.llm.function_url
+}

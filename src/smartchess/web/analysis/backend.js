@@ -29,7 +29,7 @@ async function keepAwake() {
   }
 }
 
-export function createBackend({ base, demosUrl, poolOptions = {} }) {
+export function createBackend({ base, demosUrl, llmUrl = '', poolOptions = {} }) {
   const storage = new Storage();
   const pool = new AnalysisPool({ base, ...poolOptions });
   const jobs = new Map();
@@ -154,6 +154,57 @@ export function createBackend({ base, demosUrl, poolOptions = {} }) {
     });
   }
 
+  // "Rewrite with AI": the facts of each key moment go to the explanation proxy, one request
+  // each. Past a limit or on any failure the template explanations stay.
+  async function startNarration(id, user) {
+    if (!llmUrl) throw fail('AI explanations are not available on this site', 404);
+    const { color, existing } = await review(id, user, false);
+    if (!existing) throw fail('No review', 404);
+    const job = { id: `narrate-${id}`, kind: 'narrate', status: 'running', message: 'Writing the explanations', fraction: 0, result: null, error: null, started: Date.now() };
+    jobs.set(job.id, job);
+    (async () => {
+      try {
+        const items = Object.values(existing.critical);
+        let written = 0;
+        let stopped = null;
+        for (const [i, item] of items.entries()) {
+          job.message = `Writing the explanations ${i + 1}/${items.length}`;
+          job.fraction = i / items.length;
+          const drafts = item.narration?.drafts;
+          if (!drafts) continue;
+          let response;
+          try {
+            response = await fetch(llmUrl, {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ facts: item.facts, drafts }),
+            });
+          } catch {
+            stopped = 'Could not reach the explanation service';
+            break;
+          }
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            stopped = data.error || `The explanation service answered ${response.status}`;
+            if (response.status === 429 || response.status === 403) break;
+            continue; // a busy model: the template stays for this moment, try the next one
+          }
+          item.narration = { summary: data.summary ?? '', best: data.best, simple: data.simple, tricky: data.tricky, source: data.source, drafts };
+          written++;
+        }
+        if (written) await storage.put('reviews', reviewKey(id, color), existing);
+        if (!written && stopped) throw new Error(stopped);
+        job.result = existing;
+        job.status = 'done';
+        job.fraction = 1;
+        job.message = 'Done';
+      } catch (e) {
+        job.status = 'error';
+        job.error = e.message || String(e);
+      }
+    })();
+    return snapshot(job);
+  }
+
   async function startPosition(body) {
     const id = `position-${Date.now().toString(36)}`;
     return startJob(id, 'position', async job => {
@@ -202,6 +253,8 @@ export function createBackend({ base, demosUrl, poolOptions = {} }) {
         return existing;
       }
       if (m && method === 'POST') return await startReview(m[1], user);
+      m = p.match(/^\/api\/reviews\/(\w+)\/narrations$/);
+      if (m && method === 'POST') return await startNarration(m[1], user);
       m = p.match(/^\/api\/jobs\/([\w-]+)$/);
       if (m) {
         const job = jobs.get(m[1]);

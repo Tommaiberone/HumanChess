@@ -17,7 +17,9 @@ if [ ! -f models/maia3-5m.onnx ]; then
 fi
 npm ci
 npm run build
-uv run smartchess export --out site
+# The explanation proxy (infra/app) is optional: without it the site keeps the template explanations.
+LLM_URL="${SMARTCHESS_LLM_URL:-$(terraform -chdir=infra/app output -raw llm_url 2>/dev/null || true)}"
+uv run smartchess export --out site --llm-url "$LLM_URL"
 terraform -chdir=infra init -input=false >/dev/null
 terraform -chdir=infra apply -input=false "$@"
 
