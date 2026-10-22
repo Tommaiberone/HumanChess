@@ -430,7 +430,7 @@ async function renderReview(id, startPly = 0) {
   const app = $('#app');
   Object.assign(S, {
     id, user: store.get('user', ''), review: null, cur: 0, variation: null, analyses: new Map(),
-    job: null, posJob: null, narrJob: null, hint: null, sel: null, autoplay: null, alive: true, cg: null,
+    job: null, posJob: null, narrJob: null, hint: null, sel: null, autoplay: null, alive: true, cg: null, sub: 0,
   });
   cleanup = () => {
     S.alive = false;
@@ -700,7 +700,7 @@ function go(i, { silent = false } = {}) {
   }
   S.variation = null;
   S.hint = null;
-  S.sel = null;
+  S.sel = null; S.sub = 0;
   S.cur = target;
   update();
 }
@@ -754,7 +754,7 @@ function onBoardMove(orig, dest) {
   v.moves.push({ uci, san: mv.san, fen: chess.fen() });
   v.idx = v.moves.length;
   S.hint = null;
-  S.sel = null;
+  S.sel = null; S.sub = 0;
   update();
 }
 
@@ -819,7 +819,7 @@ function drawShapes() {
     const sel = S.sel ?? defaultSel(groups, advice);
     const playedUci = advice.critical ? advice.facts.played?.uci : null;
     // The arrow of the selected card is the strong one ("your move" lights it if it is an option too).
-    const selected = sel === -1 ? playedUci : isCompact() ? compactRoles(advice)[sel]?.c.uci : groups[sel]?.c.uci;
+    const selected = sel === -1 ? playedUci : groups[sel]?.c.uci;
     const lit = groups.findIndex(g => g.c.uci === selected);
     groups.forEach((g, i) => {
       const role = g.roles[0];
@@ -1267,32 +1267,19 @@ function defaultGroup(groups, kind, played) {
 // chosen one explains itself, so the whole review fits one screen.
 const isCompact = () => !!document.querySelector('.review.compact');
 
-// One card per role (best, simplest, trickiest), even when two are the same move: each
-// keeps its own short text, which is what makes everything fit.
-function compactRoles(advice) {
-  const f = advice.facts;
-  return (f.same?.only_one_candidate ? ['best'] : ['best', 'simple', 'tricky']).map(role => ({ role, c: f[role] }));
-}
-
 // For a mistake the compact view opens on "your move" (-1): what went wrong comes first.
-// Otherwise on the move you played if it is not the best, else on the first alternative.
 function defaultSel(groups, advice) {
-  if (!isCompact()) return defaultGroup(groups, advice.kind, advice.critical ? advice.facts.played : null);
-  if (advice.critical && advice.kind === 'mistake') return -1;
-  const roles = compactRoles(advice);
-  const played = advice.critical ? advice.facts.played?.uci : null;
-  const mine = roles.findIndex(r => r.role !== 'best' && r.c.uci === played);
-  if (mine >= 0) return mine;
-  const alt = roles.findIndex(r => r.role !== 'best' && r.c.uci !== roles[0].c.uci);
-  return alt >= 0 && advice.kind === 'choice' ? alt : 0;
+  if (isCompact() && advice.critical && advice.kind === 'mistake') return -1;
+  return defaultGroup(groups, advice.kind, advice.critical ? advice.facts.played : null);
 }
 
 function selectGroup(i) {
   const advice = currentAdvice();
   if (!advice) return;
-  const count = isCompact() ? compactRoles(advice).length : adviceGroups(advice).length;
+  const count = adviceGroups(advice).length;
   if (i >= count || i < (isCompact() && advice.critical ? -1 : 0)) return;
   S.sel = i;
+  S.sub = 0;
   drawShapes();
   updateCoach();
 }
@@ -1303,10 +1290,9 @@ function optionsSection(advice) {
   const groups = adviceGroups(advice);
   const n = advice.narration || {};
   const played = advice.critical ? advice.facts.played : null;
-  const count = isCompact() ? compactRoles(advice).length : groups.length;
-  if (S.sel == null || S.sel >= count || (S.sel < 0 && !(isCompact() && advice.critical))) S.sel = defaultSel(groups, advice);
+  if (S.sel == null || S.sel >= groups.length || (S.sel < 0 && !(isCompact() && advice.critical))) S.sel = defaultSel(groups, advice);
   if (isCompact()) {
-    const rows = compactRoles(advice).map((r, i) => optionRow({ c: r.c, roles: [r.role] }, i, n, played?.uci));
+    const rows = groups.map((g, i) => optionRow(g, i, n, played?.uci));
     if (advice.critical) rows.unshift(youRow(advice));
     return [el('div', { class: 'options', style: `--n:${rows.length}` }, ...rows)];
   }
@@ -1344,10 +1330,23 @@ function optionRow({ c, roles }, i, n, playedUci) {
     el('span', { class: 'opt-eval' }, c.eval));
   if (!open) return el('div', { class: `opt ${primary}` }, head);
   const traps = roles.includes('tricky') ? c.traps : null;
+  // On a phone a card that stands for several roles (the same move) has a small switch
+  // between their explanations, instead of stacking them.
+  const compact = isCompact();
+  const sub = compact && roles.length > 1 ? Math.min(S.sub ?? 0, roles.length - 1) : 0;
+  const texts = compact
+    ? [n[roles[sub]] ? el('p', {}, ...richText(n[roles[sub]])) : null]
+    : [n[primary] ? el('p', {}, ...richText(n[primary])) : null,
+      ...others.map(r => (n[r] ? el('p', { class: 'secondary' }, ...richText(n[r])) : null))];
+  const switcher = compact && roles.length > 1
+    ? el('div', { class: 'role-pills' }, ...roles.map((r, k) => el('button', {
+      class: 'pill-btn' + (k === sub ? ' on' : ''), type: 'button', onclick: () => { S.sub = k; updateCoach(); },
+    }, ROLES[r].label)))
+    : null;
   return el('div', { class: `opt ${primary} open` }, head,
     el('div', { class: 'opt-body' },
-      n[primary] ? el('p', {}, ...richText(n[primary])) : null,
-      ...others.map(r => (n[r] ? el('p', { class: 'secondary' }, ...richText(n[r])) : null)),
+      switcher,
+      ...texts,
       el('div', { class: 'facts' },
         fact('At your level', c.at_your_level, 'Expected evaluation if you keep playing at your level'),
         fact('Vs a human', c.vs_human, 'Expected evaluation against a real opponent of their level'),
