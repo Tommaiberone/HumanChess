@@ -60,7 +60,7 @@ def export_site(out: Path, data: Path | None = None, llm_url: str = "") -> list[
     shutil.copytree(STATIC_DIR, out / "static", ignore=shutil.ignore_patterns("login.html", "index.html", "demos.json"))
 
     index = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    index = index.replace('<meta charset="utf-8">', f'<meta charset="utf-8">\n  {HEAD_META}', 1)
+    index = index.replace('<meta charset="utf-8">', f'<meta charset="utf-8">\n  {head_meta(llm_url)}', 1)
     (out / "index.html").write_text(index, encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")  # GitHub Pages: serve every file as it is
 
