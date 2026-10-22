@@ -6,7 +6,8 @@
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "build": "node scripts/build_web.mjs",
-    "test": "node --test \"web-tests/*.test.js\""
+    "test": "node --test \"web-tests/*.test.js\"",
+    "fit": "node web-tests/fit.mjs"
   },
   "dependencies": {
     "@lichess-org/chessground": "^10.4.2",

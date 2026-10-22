@@ -1,0 +1,16 @@
+import { chromium } from 'playwright-core';
+import { CHROMIUM, serve } from './serve.mjs';
+const [out, w, h, moment, option] = process.argv.slice(2);
+const site = await serve();
+const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true });
+const ctx = await browser.newContext({ viewport: { width: +w, height: +h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+const page = await ctx.newPage();
+page.on('console', m => { if (m.type() === 'error') console.log('console error:', m.text().slice(0, 100)); });
+await page.goto(site.url);
+await page.locator('.game-row.demo').first().click();
+await page.waitForSelector('.moment-row');
+await page.locator('.moment-row').nth(+moment - 1).click();
+await page.waitForSelector('.options');
+await page.locator('.opt-head').nth(+option - 1).click();
+await page.screenshot({ path: out });
+await browser.close(); site.close();

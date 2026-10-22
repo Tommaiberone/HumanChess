@@ -195,6 +195,7 @@ function route() {
   cleanup = () => {};
   // The review fills the window: the footer would only get in the way.
   document.body.classList.toggle('in-review', /^#\/game\//.test(location.hash));
+  $('#app').classList.remove('home');
   const m = location.hash.match(/^#\/game\/(\w+)(?:\/(\d+))?/);
   if (m) renderReview(m[1], m[2] ? Number(m[2]) : 0);
   else if (location.hash === '#/about') renderAbout();
@@ -296,16 +297,22 @@ async function renderHome() {
   drawChips();
   const form = el('form', { class: 'user-form', onsubmit: e => { e.preventDefault(); load(); } },
     input, el('button', { class: 'btn primary', type: 'submit' }, 'Load'));
+  // On a phone the three explanations fold away, so the form and the games are on the first screen.
+  const howGrid = el('section', { class: 'how-grid' },
+    how('best', 'Best', 'The strongest move according to Stockfish.'),
+    how('simple', 'Simplest', 'Gives up at most 0.6 pawns to the best move, but is easy to follow up at your level.'),
+    how('tricky', 'Trickiest', 'Gives up at most 1 pawn, in exchange for more chances for the opponent to go wrong.'));
+  const howBlock = matchMedia('(max-width: 760px)').matches
+    ? el('details', { class: 'card how-details' }, el('summary', {}, 'What are the three moves?'), howGrid)
+    : howGrid;
+  app.classList.add('home');
   app.replaceChildren(
     el('section', { class: 'hero' },
       el('h1', {}, 'Your games, explained calmly'),
       el('p', { class: 'muted' }, 'Mistakes and practical choices, reviewed together: at every key moment you get three options.'),
       BROWSER ? el('p', { class: 'muted small privacy-note' }, '🔒 The analysis runs on your device: your games never leave it.') : null),
-    el('section', { class: 'how-grid' },
-      how('best', 'Best', 'The strongest move according to Stockfish.'),
-      how('simple', 'Simplest', 'Gives up at most 0.6 pawns to the best move, but is easy to follow up at your level.'),
-      how('tricky', 'Trickiest', 'Gives up at most 1 pawn, in exchange for more chances for the opponent to go wrong.')),
-    el('section', { class: 'card' }, BROWSER ? sources : null, form, chips, list),
+    howBlock,
+    el('section', { class: 'card games-card' }, BROWSER ? sources : null, form, chips, list),
     BROWSER ? pgnPanel() : null,
   );
   load();
@@ -423,9 +430,15 @@ async function renderReview(id, startPly = 0) {
   const app = $('#app');
   Object.assign(S, {
     id, user: store.get('user', ''), review: null, cur: 0, variation: null, analyses: new Map(),
-    job: null, posJob: null, narrJob: null, hint: null, sel: null, autoplay: null, alive: true,
+    job: null, posJob: null, narrJob: null, hint: null, sel: null, autoplay: null, alive: true, cg: null,
   });
-  cleanup = () => { S.alive = false; clearInterval(S.autoplay); };
+  cleanup = () => {
+    S.alive = false;
+    clearInterval(S.autoplay);
+    // Chessground keeps redrawing its arrows when its element goes away, and prints NaN errors.
+    S.cg?.destroy();
+    S.cg = null;
+  };
 
   app.replaceChildren(el('div', { class: 'card loading' }, spinner(), ' Opening the game…'));
   let game;
@@ -529,7 +542,7 @@ function buildLayout(app) {
   d.summary = el('div', { class: 'summary' });
   d.graph = el('div', { class: 'graph' });
   d.moves = el('div', { class: 'moves' });
-  d.sound = el('button', { class: 'icon-btn', title: 'Move sounds', 'aria-label': 'Move sounds', onclick: toggleSound });
+  d.sound = el('button', { class: 'icon-btn hide-compact', title: 'Move sounds', 'aria-label': 'Move sounds', onclick: toggleSound });
   const tab = (key, label) => el('button', { class: 'tab', role: 'tab', onclick: () => setTab(key) }, label);
   d.tabs = { coach: tab('coach', 'Coach'), moves: tab('moves', 'Moves') };
   d.panes = {
@@ -543,21 +556,23 @@ function buildLayout(app) {
   const btn = (label, title, fn, cls = 'icon-btn') => el('button', { class: cls, title, 'aria-label': title, onclick: fn }, label);
   const controls = el('div', { class: 'controls' },
     el('div', { class: 'ctrl-group' },
-      btn('⏮', 'Start (Home)', () => go(0)),
+      btn('⏮', 'Start (Home)', () => go(0), 'icon-btn hide-compact'),
       btn('◀', 'Back (←)', () => step(-1)),
       btn('▶', 'Forward (→)', () => step(1)),
-      btn('⏭', 'Last move (End)', () => go(S.plies.length))),
+      btn('⏭', 'Last move (End)', () => go(S.plies.length), 'icon-btn hide-compact')),
     el('div', { class: 'ctrl-group' },
       btn('◀ Moment', 'Previous key moment (P)', () => jumpMoment(-1), 'icon-btn wide'),
       btn('Moment ▶', 'Next key moment (N)', () => jumpMoment(1), 'icon-btn wide')),
     el('div', { class: 'ctrl-group' },
       btn('⇅', 'Flip the board (F)', flip),
+      btn('☰', 'Move list', () => setTab(S.tab === 'moves' ? 'coach' : 'moves'), 'icon-btn compact-only'),
       d.sound));
 
   const opening = [S.meta.opening, tcLabel(S.meta.time_control), whenLabel(S.meta.end_time)].filter(Boolean).join(' · ');
   app.replaceChildren(
     el('div', { class: 'review' },
       el('section', { class: 'board-col' },
+        el('a', { class: 'back back-compact compact-only', href: '#/' }, '← games'),
         d.top,
         el('div', { class: 'board-wrap' }, d.evalbar,
           el('div', { class: 'board-frame' }, el('div', { class: 'board' }, d.cg), d.badges)),
@@ -602,7 +617,11 @@ function buildLayout(app) {
       },
     },
   });
-  const onResize = () => fitBoard();
+  const onResize = () => {
+    const was = isCompact();
+    fitBoard();
+    if (was !== isCompact()) { S.sel = null; update(); }
+  };
   const onKey = e => {
     if (e.target.matches('input, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
@@ -635,10 +654,24 @@ function fitBoard() {
   const review = $('.review');
   if (!review) return;
   const w = innerWidth, h = innerHeight;
-  const side = Math.min(460, Math.max(360, w * 0.32));
-  const target = w <= 1020 ? w - 70 : Math.min(h - 225, w - side - 120, 820);
+  // Phones: the whole review fits one screen. Portrait stacks the board over the panel;
+  // a short landscape window puts them side by side.
+  const portrait = w <= 760;
+  const land = !portrait && w > h && h <= 520;
+  review.classList.toggle('compact', portrait || land);
+  review.classList.toggle('land', land);
+  document.body.classList.toggle('compact-review', portrait || land);
+  let target;
+  if (portrait) target = Math.max(206, Math.min(w - 32, h - 500, 480));
+  else if (land) target = Math.max(200, h - 90);
+  else {
+    const side = Math.min(460, Math.max(360, w * 0.32));
+    target = w <= 1020 ? w - 70 : Math.min(h - 225, w - side - 120, 820);
+  }
   const dpr = devicePixelRatio || 1;
-  const size = Math.floor((Math.max(300, target) * dpr) / 8) * 8 / dpr;
+  // Chessground rounds the board down to a multiple of 8 device pixels, which left a
+  // strip of empty frame on the right and bottom. Size the frame to that same multiple.
+  const size = Math.floor((Math.max(portrait || land ? 200 : 300, target) * dpr) / 8) * 8 / dpr;
   review.style.setProperty('--board', `${size}px`);
   S.cg?.redrawAll();
 }
@@ -755,7 +788,8 @@ function playLine(ucis, label, fromFen = null) {
 // ---------------------------------------------------------------- rendering
 
 function update() {
-  if (!S.cg) return;
+  // A job that finishes after the user left the game must not draw on a board that is gone.
+  if (!S.cg || !S.alive) return;
   const fen = currentFen();
   const turn = turnOf(fen);
   const chess = new Chess(fen);
@@ -782,10 +816,14 @@ function drawShapes() {
   const advice = currentAdvice();
   if (advice) {
     const groups = adviceGroups(advice);
-    const sel = S.sel ?? defaultGroup(groups, advice.kind, advice.critical ? advice.facts.played : null);
+    const sel = S.sel ?? defaultSel(groups, advice);
+    const playedUci = advice.critical ? advice.facts.played?.uci : null;
+    // The arrow of the selected card is the strong one ("your move" lights it if it is an option too).
+    const selected = sel === -1 ? playedUci : isCompact() ? compactRoles(advice)[sel]?.c.uci : groups[sel]?.c.uci;
+    const lit = groups.findIndex(g => g.c.uci === selected);
     groups.forEach((g, i) => {
       const role = g.roles[0];
-      out.push({ orig: g.c.uci.slice(0, 2), dest: g.c.uci.slice(2, 4), brush: i === sel ? ROLES[role].brush : `${ROLES[role].brush}Faded` });
+      out.push({ orig: g.c.uci.slice(0, 2), dest: g.c.uci.slice(2, 4), brush: i === lit ? ROLES[role].brush : `${ROLES[role].brush}Faded` });
       g.roles.forEach(r => used.add(r));
     });
     const played = advice.critical ? advice.facts.played?.uci : null;
@@ -1142,10 +1180,12 @@ function criticalView(advice) {
         navBtn('▶', 'Next key moment (N)', 1, idx >= list.length - 1))),
     verdict(p, 'your move', f.played.eval),
   ];
-  if (n.summary) out.push(el('p', { class: 'summary-text' }, ...richText(n.summary)));
   const afterYours = kind === 'mistake' ? playedLineAction(f) : null;
-  if (afterYours) out.push(el('button', { class: 'link warn', onclick: afterYours }, '↯ See what happens after your move'));
-  if (f.same?.only_one_candidate) {
+  if (!isCompact()) {
+    if (n.summary) out.push(el('p', { class: 'summary-text' }, ...richText(n.summary)));
+    if (afterYours) out.push(el('button', { class: 'link warn', onclick: afterYours }, '↯ See what happens after your move'));
+  }
+  if (!isCompact() && f.same?.only_one_candidate) {
     out.push(el('p', { class: 'muted small' }, 'There was only one good move here: no alternatives within the margin.'));
   }
   out.push(...optionsSection(advice));
@@ -1223,10 +1263,35 @@ function defaultGroup(groups, kind, played) {
   return 0;
 }
 
+// Phones show the coach as cards: "your move" and the options are buttons, and only the
+// chosen one explains itself, so the whole review fits one screen.
+const isCompact = () => !!document.querySelector('.review.compact');
+
+// One card per role (best, simplest, trickiest), even when two are the same move: each
+// keeps its own short text, which is what makes everything fit.
+function compactRoles(advice) {
+  const f = advice.facts;
+  return (f.same?.only_one_candidate ? ['best'] : ['best', 'simple', 'tricky']).map(role => ({ role, c: f[role] }));
+}
+
+// For a mistake the compact view opens on "your move" (-1): what went wrong comes first.
+// Otherwise on the move you played if it is not the best, else on the first alternative.
+function defaultSel(groups, advice) {
+  if (!isCompact()) return defaultGroup(groups, advice.kind, advice.critical ? advice.facts.played : null);
+  if (advice.critical && advice.kind === 'mistake') return -1;
+  const roles = compactRoles(advice);
+  const played = advice.critical ? advice.facts.played?.uci : null;
+  const mine = roles.findIndex(r => r.role !== 'best' && r.c.uci === played);
+  if (mine >= 0) return mine;
+  const alt = roles.findIndex(r => r.role !== 'best' && r.c.uci !== roles[0].c.uci);
+  return alt >= 0 && advice.kind === 'choice' ? alt : 0;
+}
+
 function selectGroup(i) {
   const advice = currentAdvice();
   if (!advice) return;
-  if (i < 0 || i >= adviceGroups(advice).length) return;
+  const count = isCompact() ? compactRoles(advice).length : adviceGroups(advice).length;
+  if (i >= count || i < (isCompact() && advice.critical ? -1 : 0)) return;
   S.sel = i;
   drawShapes();
   updateCoach();
@@ -1238,12 +1303,35 @@ function optionsSection(advice) {
   const groups = adviceGroups(advice);
   const n = advice.narration || {};
   const played = advice.critical ? advice.facts.played : null;
-  if (S.sel == null || S.sel >= groups.length) S.sel = defaultGroup(groups, advice.kind, played);
+  const count = isCompact() ? compactRoles(advice).length : groups.length;
+  if (S.sel == null || S.sel >= count || (S.sel < 0 && !(isCompact() && advice.critical))) S.sel = defaultSel(groups, advice);
+  if (isCompact()) {
+    const rows = compactRoles(advice).map((r, i) => optionRow({ c: r.c, roles: [r.role] }, i, n, played?.uci));
+    if (advice.critical) rows.unshift(youRow(advice));
+    return [el('div', { class: 'options', style: `--n:${rows.length}` }, ...rows)];
+  }
   return [
     el('div', { class: 'options-label' }, el('span', {}, groups.length > 1 ? 'Your options' : 'The move'),
       el('span', { class: 'muted' }, 'eval for you')),
-    el('div', { class: 'options' }, ...groups.map((g, i) => optionRow(g, i, n, played?.uci))),
+    el('div', { class: 'options', style: `--n:${groups.length}` }, ...groups.map((g, i) => optionRow(g, i, n, played?.uci))),
   ];
+}
+
+// "Your move" as the first card of the compact view: what you played and what it meant.
+function youRow(advice) {
+  const f = advice.facts;
+  const n = advice.narration || {};
+  const open = S.sel === -1;
+  const after = advice.kind === 'mistake' ? playedLineAction(f) : null;
+  const head = el('button', { class: 'opt-head', 'aria-expanded': String(open), title: 'Your move', onclick: () => selectGroup(-1) },
+    el('span', { class: 'opt-icons' }), el('span', { class: 'opt-roles' }, 'Your move'),
+    el('span', { class: 'opt-move' }, el('b', { class: 'mv' }, f.played.san)), el('span', { class: 'opt-eval' }, f.played.eval));
+  if (!open) return el('div', { class: 'opt you' }, head);
+  return el('div', { class: 'opt you open' }, head,
+    el('div', { class: 'opt-body' },
+      n.summary ? el('p', {}, ...richText(n.summary)) : null,
+      f.same?.only_one_candidate ? el('p', { class: 'muted' }, 'There was only one good move here: no alternatives within the margin.') : null,
+      after ? el('button', { class: 'link warn', onclick: after }, '↯ See what happens after your move') : null));
 }
 
 function optionRow({ c, roles }, i, n, playedUci) {

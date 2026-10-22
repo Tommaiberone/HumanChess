@@ -32,7 +32,7 @@ const base = process.env.SITE_URL ?? `http://127.0.0.1:${server.address().port}/
 const browser = await chromium.launch({ executablePath: chrome, headless: true });
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 const problems = [];
-page.on('console', m => { if (['error', 'warning'].includes(m.type())) problems.push(`${m.type()}: ${m.text()}`); });
+page.on('console', m => { if (['error', 'warning'].includes(m.type())) { problems.push(`${m.type()}: ${m.text()}`); if (process.env.TRACE) console.log('   [console]', m.text().slice(0, 70)); } });
 page.on('pageerror', e => problems.push(`pageerror: ${e.message}`));
 page.on('response', r => { if (r.status() >= 400) problems.push('http ' + r.status() + ' ' + r.url()); });
 page.on('requestfailed', r => problems.push(`requestfailed: ${r.url()} ${r.failure()?.errorText}`));
@@ -67,6 +67,7 @@ await page.locator('.user-form button').click();
 await page.waitForTimeout(500);
 
 // The demo game opens from its stored review, with no analysis.
+await page.waitForSelector('.game-row.demo', { timeout: 15000 });
 await page.locator('.game-row.demo').first().click();
 await page.waitForSelector('.moment-row, .options', { timeout: 15000 });
 console.log('demo review shown:', await page.locator('.moment-row').count(), 'key moments');
