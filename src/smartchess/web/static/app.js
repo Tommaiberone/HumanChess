@@ -529,8 +529,8 @@ async function runNarrationJob() {
 function buildLayout(app) {
   S.dom = {};
   const d = S.dom;
-  d.top = el('div', { class: 'player' });
-  d.bottom = el('div', { class: 'player' });
+  d.top = el('div', { class: 'player top' });
+  d.bottom = el('div', { class: 'player bottom' });
   d.evalFill = el('div', { class: 'evalbar-fill' });
   d.evalLabel = el('span', { class: 'evalbar-label' });
   d.evalbar = el('div', { class: 'evalbar', title: 'Evaluation (Stockfish)' }, d.evalFill, d.evalLabel);
@@ -654,17 +654,22 @@ function fitBoard() {
   const review = $('.review');
   if (!review) return;
   const w = innerWidth, h = innerHeight;
-  // Phones: the whole review fits one screen. Portrait stacks the board over the panel;
-  // a short landscape window puts them side by side.
-  const portrait = w <= 760;
-  const land = !portrait && w > h && h <= 520;
+  // Phones: the review is one screen. Portrait stacks the board over the panel; a short
+  // landscape window (a phone on its side, whatever its width) puts them side by side.
+  const land = w > h && h <= 520;
+  const portrait = !land && w <= 760;
   review.classList.toggle('compact', portrait || land);
   review.classList.toggle('land', land);
   document.body.classList.toggle('compact-review', portrait || land);
   let target;
-  if (portrait) target = Math.max(206, Math.min(w - 32, h - 500, 480));
-  else if (land) target = Math.max(200, h - 90);
-  else {
+  if (portrait) {
+    // As wide as the screen, unless that leaves the panel less than a quarter of it (155px
+    // at least): the panel scrolls, but the start of the explanation should be in view.
+    const fixed = $('.player.top').offsetHeight + $('.controls').offsetHeight + 5 + parseFloat(getComputedStyle(review).paddingTop);
+    target = Math.min(w, h - fixed - Math.max(155, h * 0.25));
+  } else if (land) {
+    target = Math.min(h - parseFloat(getComputedStyle(review).paddingTop) - 4, w - 300);
+  } else {
     const side = Math.min(460, Math.max(360, w * 0.32));
     target = w <= 1020 ? w - 70 : Math.min(h - 225, w - side - 120, 820);
   }
@@ -884,7 +889,8 @@ function updateEvalbar() {
   const i = S.variation ? S.variation.base : S.cur;
   const p = S.review && i > 0 ? S.plies[i - 1] : null;
   const win = p ? p.white_win : 50;
-  S.dom.evalFill.style.height = `${win}%`;
+  // A height in the vertical bar, a width in the phone's horizontal strip.
+  S.dom.evalFill.style.setProperty('--win', `${win}%`);
   S.dom.evalLabel.textContent = p ? p.white_eval.replace('+', '') : '';
   S.dom.evalLabel.classList.toggle('on-white', win >= 50);
 }
@@ -924,7 +930,7 @@ function updateMoveList() {
   const cell = S.moveEls?.[active];
   if (cell && S.tab === 'moves') {
     const box = S.dom.panesBox;
-    const top = cell.offsetTop - box.offsetTop;
+    const top = cell.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
     if (top < box.scrollTop + 40 || top > box.scrollTop + box.clientHeight - 40) box.scrollTop = top - box.clientHeight / 2;
   }
 }
@@ -1018,6 +1024,11 @@ function updateCoach() {
     parts.push(analyseButton());
   }
   c.replaceChildren(...parts);
+  // A new position starts at the top of the panel; choosing another card or stepping
+  // through a line keeps the reader where they are.
+  const at = S.variation ? `v${S.variation.base}` : S.cur;
+  if (at !== S.coachAt && S.tab === 'coach') S.dom.panesBox.scrollTop = 0;
+  S.coachAt = at;
 }
 
 function coachHead(title, sub, cls = '') {
@@ -1178,8 +1189,9 @@ function criticalView(advice) {
         navBtn('◀', 'Previous key moment (P)', -1, idx <= 0),
         el('span', { class: 'muted small' }, `${idx + 1} of ${list.length}`),
         navBtn('▶', 'Next key moment (N)', 1, idx >= list.length - 1))),
-    verdict(p, 'your move', f.played.eval),
   ];
+  // On a phone the "your move" card carries the verdict, so the explanation starts higher.
+  if (!isCompact()) out.push(verdict(p, 'your move', f.played.eval));
   const afterYours = kind === 'mistake' ? playedLineAction(f) : null;
   if (!isCompact()) {
     if (n.summary) out.push(el('p', { class: 'summary-text' }, ...richText(n.summary)));
@@ -1309,9 +1321,11 @@ function youRow(advice) {
   const n = advice.narration || {};
   const open = S.sel === -1;
   const after = advice.kind === 'mistake' ? playedLineAction(f) : null;
-  const head = el('button', { class: 'opt-head', 'aria-expanded': String(open), title: 'Your move', onclick: () => selectGroup(-1) },
-    el('span', { class: 'opt-icons' }), el('span', { class: 'opt-roles' }, 'Your move'),
-    el('span', { class: 'opt-move' }, el('b', { class: 'mv' }, f.played.san)), el('span', { class: 'opt-eval' }, f.played.eval));
+  const p = S.plies[S.cur];
+  const head = el('button', { class: 'opt-head', 'aria-expanded': String(open), onclick: () => selectGroup(-1),
+    title: `${moveLabel(p)} ${JUDGEMENTS[p.judgement]?.phrase ?? ''}` },
+  el('span', { class: 'opt-icons' }), el('span', { class: 'opt-roles' }, 'Your move'),
+  el('span', { class: 'opt-move' }, jIcon(p.judgement, 'sm'), el('b', { class: 'mv' }, f.played.san)), el('span', { class: 'opt-eval' }, f.played.eval));
   if (!open) return el('div', { class: 'opt you' }, head);
   return el('div', { class: 'opt you open' }, head,
     el('div', { class: 'opt-body' },

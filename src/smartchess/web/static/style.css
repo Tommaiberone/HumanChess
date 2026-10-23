@@ -226,7 +226,7 @@ cg-board square.check { background: radial-gradient(ellipse at center, rgba(200,
 
 /* ---------- eval bar */
 .evalbar { position: relative; border-radius: 8px; overflow: hidden; background: var(--eval-black); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15); }
-.evalbar-fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--eval-white); transition: height .35s ease; }
+.evalbar-fill { position: absolute; left: 0; right: 0; bottom: 0; height: var(--win, 50%); background: var(--eval-white); transition: height .35s ease; }
 .evalbar.flipped .evalbar-fill { bottom: auto; top: 0; }
 .evalbar.stale { opacity: .45; }
 .evalbar-label {
@@ -460,10 +460,14 @@ textarea.input.pgn { font: 13px/1.4 ui-monospace, "Cascadia Mono", Consolas, mon
 .site-footer a { text-decoration: underline; text-underline-offset: 2px; }
 body.in-review .site-footer { display: none; }
 
-/* ---------- phones: the whole review in one screen, nothing scrolls
-   Portrait: board on top, a compact panel below. A short landscape window puts them side
-   by side. fitBoard() adds .compact (and .land) and sizes --board; the panel only scrolls
-   as a last resort, for a text that really does not fit. */
+/* ---------- phones: the board edge to edge, readable text, the controls under the thumb
+   Portrait: the opponent's row, the board as wide as the screen over a thin eval strip,
+   the coach panel, and the controls at the bottom, as in the chess apps. The panel
+   scrolls when a text is longer than the room left; the text never shrinks to fit.
+   A short landscape window puts the board on the left at full height. fitBoard() adds
+   .compact (and .land) and sizes --board. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+button, a, summary { touch-action: manipulation; }
 .compact-only { display: none; }
 .review.compact .compact-only { display: inline-grid; }
 .review.compact .hide-compact { display: none; }
@@ -472,119 +476,139 @@ body.compact-review .topbar, body.compact-review .site-footer { display: none; }
 body.compact-review main { padding: 0; }
 .review.compact {
   --role-bg: var(--bg);
-  display: flex; flex-direction: column; gap: 6px; height: 100vh; height: 100dvh; overflow: hidden;
-  padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "top" "board" "panel" "controls";
+  gap: 0; height: 100vh; height: 100dvh; overflow: hidden;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  -webkit-tap-highlight-color: transparent;
 }
-.review.compact .board-col { gap: 4px; justify-items: center; flex: none; }
-.review.compact .player { min-height: 20px; font-size: 13px; padding: 0 2px; width: 100%; }
-.review.compact .board-wrap { grid-template-columns: 8px var(--board); gap: 6px; }
-.review.compact .evalbar-label, .review.compact .legend { display: none; }
-.review.compact .board { border-radius: 6px; box-shadow: 0 0 0 3px #7a5434; }
-.review.compact .controls { padding: 0; gap: 4px; flex-wrap: nowrap; justify-content: space-between; width: 100%; }
-.review.compact .ctrl-group { gap: 4px; }
-.review.compact .icon-btn.wide { padding: 0 8px; font-size: 13px; }
+.review.compact .board-col { display: contents; }
+.review.compact .player.top { grid-area: top; min-height: 36px; padding: 0 100px 0 12px; font-size: 15px; gap: 6px;
+  white-space: nowrap; overflow: hidden; }
+.review.compact .player.bottom, .review.compact .legend { display: none; }
+.review.compact .back-compact { grid-area: top; justify-self: end; align-self: stretch; place-items: center; padding: 0 14px;
+  font-size: 15px; }
+.review.compact .board { border-radius: 0; box-shadow: none; }
+.review.compact .cg-wrap coords { font-size: 10px; }
+.review.compact:not(.land) .board-wrap { grid-area: board; grid-template-columns: var(--board); grid-template-rows: 5px auto; gap: 0;
+  justify-content: center; }
+.review.compact:not(.land) .evalbar { border-radius: 0; box-shadow: none; }
+.review.compact:not(.land) .evalbar-label { display: none; }
+/* The strip fills from the side of the player at the bottom of the board. */
+.review.compact:not(.land) .evalbar-fill { top: 0; bottom: 0; left: 0; right: auto; height: auto; width: var(--win, 50%);
+  transition: width .35s ease; }
+.review.compact:not(.land) .evalbar.flipped .evalbar-fill { left: auto; right: 0; }
 
-.review.compact .side-col { flex: 1; min-height: 0; padding: 8px 10px; gap: 6px; border-radius: 14px; overflow: hidden; }
-.review.compact .side-head { display: none; }
-.review.compact .board-col { position: relative; }
-.review.compact .back-compact { position: absolute; top: 1px; right: 2px; z-index: 2; font-size: 13px; }
-.review.compact .opt-move .tag { display: none; }
-.review.compact .side-head .summary, .review.compact .side-head .graph, .review.compact .tabs,
-.review.compact .side-top .back + .back, .review.compact .side-title .muted, .review.compact .side-title .demo-title { display: none; }
-.review.compact .side-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.review.compact .panes { margin: 0 -4px; padding: 0 4px; }
-.review.compact .coach { gap: 8px; }
-.review.compact .coach-avatar { display: none; }
-.review.compact .coach-head h3 { font-size: 15px; }
-.review.compact .moment-bar { font-size: 12px; }
-.review.compact .verdict { gap: 8px; }
-.review.compact .verdict h3 { font-size: 15px; }
-.review.compact .verdict .j-icon { width: 28px; height: 28px; }
-.review.compact .verdict-eval { font-size: 13px; padding: 2px 8px; }
-.review.compact .quality, .review.compact .options-label, .review.compact .opt-icons { display: none; }
-.review.compact .footnote { font-size: 11px; margin: 0; }
-
-/* Options: the three moves side by side as buttons, only the open one explains itself below. */
-.review.compact .options { grid-template-columns: repeat(var(--n, 3), 1fr); gap: 6px; }
-.review.compact .opt { display: contents; }
-.review.compact .opt.best { --role-bg: var(--best-bg); } .review.compact .opt.simple { --role-bg: var(--simple-bg); } .review.compact .opt.tricky { --role-bg: var(--tricky-bg); }
-.review.compact .opt-head { grid-row: 1; grid-template-columns: auto auto; justify-content: center; gap: 0 8px; padding: 5px 4px;
-  border-radius: 12px; background: var(--bg); border: 2px solid transparent; }
-.review.compact .opt.open .opt-head { background: var(--role-bg); border-color: var(--role); }
-.review.compact .opt-roles { grid-column: 1 / -1; font-size: 11px; text-align: center; }
-.review.compact .opt-move .mv { font-size: 14px; }
-.review.compact .opt-eval { min-width: 0; font-size: 13px; }
-.review.compact .opt-body { grid-row: 2; grid-column: 1 / -1; border-radius: 12px; padding: 8px 12px 10px; gap: 6px;
-  background: var(--role-bg); box-shadow: inset 3px 0 0 var(--role); }
-.review.compact .opt-body p { font-size: 13px; line-height: 1.4; margin: 0; }
-.review.compact .facts { font-size: 12px; gap: 2px 12px; }
-.review.compact .moment-row { padding: 6px 8px; }
-
-/* A short landscape window: board on the left, panel on the right. */
-.review.compact.land { flex-direction: row; }
-.review.compact.land .board-col { justify-items: start; }
-.review.compact.land .side-col { flex: 1; }
-.review.compact.land .controls { flex-wrap: wrap; }
-.opt.you { --role: var(--played); --role-bg: var(--mistake-bg); }
-.opt.you .opt-roles { color: var(--played); }
-.review.compact .verdict .verdict-text .muted { display: none; }
-.review.compact .opt-body .link { justify-self: start; font-size: 13px; }
-
-/* Tighter still: the key-moment arrows are in the controls row, so the bar keeps just the count. */
-.review.compact .moment-nav .icon-btn { display: none; }
-.review.compact .moment-bar { min-height: 0; padding-top: 0; padding-bottom: 0; }
-.review.compact .coach { gap: 6px; }
-.review.compact .verdict .j-icon { width: 24px; height: 24px; }
-.review.compact .verdict h3 { font-size: 14.5px; line-height: 1.2; }
-.review.compact .opt-head { padding: 4px 3px; }
-.review.compact .opt-body { padding: 6px 10px 8px; gap: 4px; }
-.review.compact .opt-body p { font-size: 12.5px; line-height: 1.38; }
-.review.compact .facts { font-size: 11.5px; gap: 0 12px; }
-.review.compact .side-col { padding: 6px 10px 8px; }
-
-/* Short phones (small iPhones, Android with browser bars): a little less of everything. If a
-   text still does not fit, the panel scrolls, with a fade at the bottom to say so. */
-@media (max-height: 720px) {
-  .review.compact .player { min-height: 17px; font-size: 12px; }
-  .review.compact .opt-body p { font-size: 12px; line-height: 1.32; }
-  .review.compact .opt-body { padding: 5px 9px 6px; }
-  .review.compact .facts { font-size: 11px; }
-  .review.compact .icon-btn { height: 34px; }
-  .review.compact .verdict .verdict-eval { display: none; }
-}
-.review.compact .panes { mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); }
+.review.compact .side-col { grid-area: panel; min-height: 0; overflow: hidden; gap: 0; padding: 10px 14px 0;
+  border: 0; border-radius: 0; box-shadow: none; font-size: 16px; line-height: 1.5; }
+.review.compact .side-head, .review.compact .tabs { display: none; }
+.review.compact .panes { margin: 0 -14px; padding: 0 14px 14px; mask-image: linear-gradient(to bottom, #000 calc(100% - 12px), transparent); }
 .review.compact .panes:not(:hover) { scrollbar-width: none; }
 
-/* ---------- phones: the home is one screen too; only the list of games scrolls, inside its card */
-@media (max-width: 760px) {
-  body:has(#app.home) { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-  #app.home { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 4px 12px 0; }
-  #app.home .hero { padding: 0; }
-  #app.home .hero h1 { font-size: 24px; }
-  #app.home .hero p { margin: 4px 0 0; font-size: 14px; }
-  #app.home .how-details { padding: 8px 14px; border-radius: 14px; }
-  #app.home .how-details summary { cursor: pointer; font-weight: 700; color: var(--muted); font-size: 13px; }
-  #app.home .how-details .how-grid { margin-top: 10px; }
-  #app.home .games-card { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px; }
-  #app.home .games-card .chips { margin: 8px 0 6px; flex: none; }
-  #app.home .games-card .chips.sources { margin: 0 0 8px; }
-  #app.home .game-list { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -4px; padding: 0 4px; align-content: start; }
-  #app.home .pgn-card { flex: none; margin: 0; padding: 10px 14px; border-radius: 14px; }
-  #app.home .pgn-card[open] { max-height: 50%; overflow-y: auto; }
-  body:has(#app.home) .site-footer { flex: none; padding: 6px 16px 10px; font-size: 12px; }
-}
-@media (max-width: 760px) {
-  body:has(#app.home) .topbar { width: 100%; margin: 0; padding: 12px 16px 4px; }
-  #app.home .game-row { grid-template-columns: 30px 1fr auto; gap: 10px; padding: 10px; }
-  #app.home .demo-title { display: block; font-size: 14px; }
-  #app.home .demo-title .tag { margin-right: 6px; }
-  #app.home .game-title { font-size: 14px; }
-  #app.home .game-sub { font-size: 12px; }
-}
-.review.compact .footnote { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; }
+.review.compact .controls { grid-area: controls; flex-wrap: nowrap; gap: 6px; padding: 6px 8px max(6px, env(safe-area-inset-bottom));
+  background: var(--card); border-top: 1px solid var(--line); }
+/* Flip and moves on the left, key moments in the middle, back / forward on the right. */
+.review.compact .ctrl-group { gap: 6px; flex: 2 1 0; min-width: 0; }
+.review.compact .ctrl-group:nth-child(1) { order: 3; }
+.review.compact .ctrl-group:nth-child(2) { order: 2; flex-grow: 3.2; }
+.review.compact .ctrl-group:nth-child(3) { order: 1; }
+.review.compact .controls .icon-btn { flex: 1 1 0; min-width: 0; width: auto; height: 48px; padding: 0; font-size: 20px; }
+.review.compact .controls .icon-btn.wide { font-size: 14px; white-space: nowrap; }
+.review.compact .icon-btn:active { background: var(--accent-soft); }
+
+/* The coach panel */
+.review.compact .coach { gap: 10px; }
+.review.compact .coach p { line-height: 1.5; }
+.review.compact .coach-avatar { display: none; }
+.review.compact .coach-head h3 { font-size: 19px; }
+.review.compact .small, .review.compact .muted.small { font-size: 14px; }
+.review.compact .btn { padding: 12px 18px; }
+.review.compact .moment-bar { font-size: 13px; }
+.review.compact .moment-nav .icon-btn { display: none; }
+.review.compact .verdict { gap: 10px; }
+.review.compact .verdict h3 { font-size: 18px; line-height: 1.25; }
+.review.compact .verdict .j-icon { width: 30px; height: 30px; }
+.review.compact .verdict .verdict-text .muted { display: none; }
+.review.compact .moment-row { padding: 10px 12px; min-height: 50px; }
+.review.compact .q-row { font-size: 15px; }
+.review.compact .var-moves { font-size: 16px; gap: 6px 10px; }
+.review.compact .footnote { display: flex; align-items: baseline; gap: 6px; min-width: 0; margin: 0; font-size: 12px; white-space: nowrap; }
 .review.compact .footnote .src { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.review.compact .footnote button { flex: none; }
-.role-pills { display: flex; gap: 6px; }
-.pill-btn { font: inherit; font-size: 11px; font-weight: 800; padding: 1px 10px; border-radius: 999px; cursor: pointer;
+.review.compact .footnote button { flex: none; font-size: 13px; padding: 6px 0; }
+
+/* Options: your move and the candidates side by side as cards; only the chosen one explains itself below. */
+.review.compact .options-label, .review.compact .opt-icons, .review.compact .opt-move .tag { display: none; }
+.review.compact .options { grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); gap: 6px; }
+.review.compact .opt { display: contents; }
+.review.compact .opt.best { --role-bg: var(--best-bg); } .review.compact .opt.simple { --role-bg: var(--simple-bg); } .review.compact .opt.tricky { --role-bg: var(--tricky-bg); }
+.opt.you { --role: var(--played); --role-bg: var(--mistake-bg); }
+.opt.you .opt-roles { color: var(--played); }
+/* A card: the role, the move (with your move's class), the eval, one line each. */
+.review.compact .opt-head { grid-row: 1; display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; justify-items: center;
+  gap: 0; padding: 6px 4px; border-radius: 12px; background: var(--bg); border: 2px solid transparent; text-align: center; line-height: 1.25; }
+.review.compact .opt.open .opt-head { background: var(--role-bg); border-color: var(--role); }
+.review.compact .opt-roles { font-size: 13px; white-space: normal; }
+.review.compact .opt-move { gap: 4px; }
+.review.compact .opt-move .mv { font-size: 16px; }
+.review.compact .opt-eval { min-width: 0; font-size: 13px; text-align: center; }
+.review.compact .opt-body { grid-row: 2; grid-column: 1 / -1; gap: 10px; padding: 10px 14px 12px 16px; border-radius: 12px;
+  background: var(--role-bg); box-shadow: inset 3px 0 0 var(--role); }
+.review.compact .opt-body p { font-size: 16px; margin: 0; }
+.review.compact .facts { font-size: 14px; gap: 2px 16px; }
+.review.compact .opt-actions { gap: 0 20px; }
+.review.compact .opt-body .link { justify-self: start; font-size: 15px; padding: 4px 0; }
+.role-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill-btn { font: inherit; font-size: 14px; font-weight: 800; padding: 4px 14px; border-radius: 999px; cursor: pointer;
   border: 1px solid var(--line); background: var(--card); color: var(--muted); }
 .pill-btn.on { background: var(--role); border-color: transparent; color: #fff8ef; }
+
+/* The move list: rows tall enough to tap. */
+.review.compact .move-row { grid-template-columns: 44px 1fr 1fr; }
+.review.compact .move { padding: 8px 10px; font-size: 16px; }
+.review.compact .move-no { font-size: 14px; padding-top: 9px; }
+.review.compact .keys { display: none; }
+
+/* A short landscape window: the board on the left at full height with the vertical eval bar. */
+.review.compact.land {
+  grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "board top" "board panel" "board controls";
+  padding-top: max(4px, env(safe-area-inset-top)); padding-left: max(4px, env(safe-area-inset-left));
+}
+.review.compact.land .board-wrap { grid-area: board; grid-template-columns: 8px var(--board); gap: 4px; align-self: start; margin-right: 8px; }
+.review.compact.land .evalbar-label { display: none; }
+.review.compact.land .side-col, .review.compact.land .player.top, .review.compact.land .controls { border-left: 1px solid var(--line); }
+.review.compact.land .controls .icon-btn { height: 44px; }
+
+/* ---------- phones: the home scrolls as one page (a list scrolling inside a card was a
+   few rows high once the browser's own bars took their share of the screen) */
+@media (max-width: 760px) {
+  body:has(#app.home) .topbar { padding: max(12px, env(safe-area-inset-top)) 16px 4px; }
+  #app.home { display: flex; flex-direction: column; gap: 12px; padding: 4px 12px 16px; }
+  #app.home .hero { padding: 0; }
+  #app.home .hero h1 { font-size: 25px; }
+  #app.home .hero p { margin: 4px 0 0; font-size: 15px; }
+  #app.home .how-details { padding: 10px 14px; border-radius: 14px; }
+  #app.home .how-details summary { cursor: pointer; font-weight: 700; color: var(--muted); font-size: 15px; }
+  #app.home .how-details .how-grid { margin-top: 10px; }
+  #app.home .how p { font-size: 15px; }
+  #app.home .games-card { padding: 12px; }
+  #app.home .games-card .chips { margin: 10px 0 8px; }
+  #app.home .games-card .chips.sources { margin: 0 0 10px; }
+  /* The time controls stay on one line and scroll sideways if they must. */
+  #app.home .games-card .chips:not(.sources) { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-right: -12px; padding-right: 12px; }
+  #app.home .chip { flex: none; font-size: 14px; padding: 7px 14px; }
+  /* A game: the result, its title on the whole width, the accuracy on a line of its own. */
+  #app.home .game-row { grid-template-columns: 34px minmax(0, 1fr); gap: 4px 12px; padding: 12px; }
+  #app.home .result-badge { width: 34px; height: 34px; }
+  #app.home .game-side { grid-column: 2; display: flex; align-items: center; gap: 10px; }
+  #app.home .game-side .tag { margin: 0; }
+  #app.home .demo-title { display: block; font-size: 15px; }
+  #app.home .demo-title .tag { margin-right: 6px; }
+  #app.home .game-title { font-size: 15px; }
+  #app.home .game-sub { font-size: 13px; }
+  #app.home .pgn-card { margin: 0; padding: 12px 14px; border-radius: 14px; }
+  body:has(#app.home) .site-footer { padding: 0 16px max(16px, env(safe-area-inset-bottom)); font-size: 13px; }
+  /* Under 16px, iOS zooms into a field when it gets the focus. */
+  .input, textarea.input.pgn { font-size: 16px; }
+}
+

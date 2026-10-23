@@ -8,6 +8,7 @@ export const CHROMIUM = process.env.CHROMIUM ?? 'C:/Program Files/Chromium/Appli
 const MIME = {
   '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
   '.wasm': 'application/wasm', '.woff2': 'font/woff2', '.onnx': 'application/octet-stream', '.svg': 'image/svg+xml',
+  '.png': 'image/png', '.webmanifest': 'application/manifest+json',
 };
 
 /** Serve SITE on a free port; resolves to {url, close}. With SITE_URL set, point at that site instead. */
