@@ -27,6 +27,24 @@ function el(tag, props = {}, ...kids) {
 const BROWSER = document.querySelector('meta[name="smartchess-mode"]')?.content === 'browser';
 // The explanation proxy (infra/app, llm_lambda.py): without it the browser version has only template explanations.
 const LLM_URL = document.querySelector('meta[name="smartchess-llm"]')?.content || '';
+// The fingerprint of this page's code (export.py), shown in the footer.
+const BUILD = document.querySelector('meta[name="smartchess-build"]')?.content || '';
+
+// A phone keeps a tab alive for days, and moving between the hash routes never reloads
+// the page. When the tab comes back, ask the live site for its build: if it changed,
+// reload at once on the home, or at the next page change in the middle of a review.
+let outdated = false;
+let checkedAt = 0;
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden || !BUILD || outdated || Date.now() - checkedAt < 60_000) return;
+  checkedAt = Date.now();
+  try {
+    const live = await (await fetch('./', { cache: 'no-store' })).text();
+    outdated = !live.includes(`name="smartchess-build" content="${BUILD}"`);
+  } catch { return; /* offline: keep this version */ }
+  if (outdated && !location.hash.startsWith('#/game/')) location.reload();
+});
+if (BUILD) $('.site-footer')?.append(` · version ${BUILD}`);
 
 let backend = null;
 async function browserBackend() {
@@ -191,6 +209,7 @@ window.addEventListener('hashchange', route);
 route();
 
 function route() {
+  if (outdated) { location.reload(); return; }
   cleanup();
   cleanup = () => {};
   // The review fills the window: the footer would only get in the way.

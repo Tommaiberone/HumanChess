@@ -51,8 +51,9 @@ resource "aws_s3_object" "site" {
   source       = "${local.site_dir}/${each.value}"
   etag         = filemd5("${local.site_dir}/${each.value}")
   content_type = lookup(local.content_types, reverse(split(".", each.value))[0], "application/octet-stream")
-  # File names carry no hash, so keep caches short; deploy.sh also invalidates.
-  cache_control = each.value == "index.html" ? "no-cache" : contains(local.long_cache, reverse(split(".", each.value))[0]) ? "public, max-age=604800" : "public, max-age=300"
+  # File names carry no hash: browsers revalidate the page and its code on every load (a
+  # 304 is a few bytes), so a reload right after a deploy gets it; deploy.sh also invalidates.
+  cache_control = contains(local.long_cache, reverse(split(".", each.value))[0]) ? "public, max-age=604800" : "no-cache"
 }
 
 resource "aws_cloudfront_origin_access_control" "site" {
