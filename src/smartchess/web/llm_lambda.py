@@ -143,7 +143,8 @@ def handle(event: dict) -> dict:
     try:
         data, model = explain(facts, drafts, max_wait=8)
     except LLMError as exc:
-        raise Rejected(502, f"The explanation service is busy: {str(exc)[:160]}") from None
+        print(f"explain failed: {str(exc)[:300]}")  # for the logs; the visitor gets a short message
+        raise Rejected(502, "The AI is busy right now: the data-based explanations stay, try again in a minute") from None
     return _reply(200, {**data, "source": model})
 
 

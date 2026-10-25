@@ -80,7 +80,7 @@ function lichessRecord(g) {
 export async function fetchLichess(username, limit = 30, timeClass = '') {
   const name = checkUsername(username);
   const params = new URLSearchParams({
-    max: String(limit), pgnInJson: 'true', opening: 'true', moves: 'false', clocks: 'false', evals: 'false', finished: 'true',
+    max: String(limit), pgnInJson: 'true', opening: 'true', moves: 'true', clocks: 'false', evals: 'false', finished: 'true',
   });
   if (timeClass && TIME_CLASS_TO_LICHESS[timeClass]) params.set('perfType', TIME_CLASS_TO_LICHESS[timeClass]);
   let response;

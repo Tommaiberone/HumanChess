@@ -537,7 +537,7 @@ async function runPositionJob() {
 async function runNarrationJob() {
   try {
     const job = await pollJob(await post(`/api/reviews/${S.id}/narrations`), j => { S.narrJob = j; updateCoach(); });
-    S.narrJob = null;
+    S.narrJob = job.notice ? { status: 'error', error: job.notice } : null;
     if (job.status === 'done') setReview(job.result);
   } catch (e) {
     S.narrJob = { status: 'error', error: e.message };

@@ -66,7 +66,7 @@ export function createBackend({ base, demosUrl, llmUrl = '', poolOptions = {} })
 
   const snapshot = job => ({
     id: job.id, kind: job.kind, status: job.status, message: job.message, fraction: job.fraction,
-    result: job.result, error: job.error, elapsed: job.started ? Math.round((Date.now() - job.started) / 100) / 10 : 0,
+    result: job.result, error: job.error, notice: job.notice ?? null, elapsed: job.started ? Math.round((Date.now() - job.started) / 100) / 10 : 0,
   });
 
   function startJob(id, kind, work) {
@@ -167,6 +167,7 @@ export function createBackend({ base, demosUrl, llmUrl = '', poolOptions = {} })
         const items = Object.values(existing.critical);
         let written = 0;
         let stopped = null;
+        let busy = 0; // consecutive "busy" answers: the service is saturated, so stop asking
         for (const [i, item] of items.entries()) {
           job.message = `Writing the explanations ${i + 1}/${items.length}`;
           job.fraction = i / items.length;
@@ -186,13 +187,16 @@ export function createBackend({ base, demosUrl, llmUrl = '', poolOptions = {} })
           if (!response.ok) {
             stopped = data.error || `The explanation service answered ${response.status}`;
             if (response.status === 429 || response.status === 403) break;
+            if (++busy >= 2) break;
             continue; // a busy model: the template stays for this moment, try the next one
           }
+          busy = 0;
           item.narration = { summary: data.summary ?? '', best: data.best, simple: data.simple, tricky: data.tricky, source: data.source, drafts };
           written++;
         }
         if (written) await storage.put('reviews', reviewKey(id, color), existing);
         if (!written && stopped) throw new Error(stopped);
+        if (stopped && written < items.length) job.notice = `The AI is busy: ${written} of ${items.length} rewritten, the rest keep the data-based text. Try again in a minute.`;
         job.result = existing;
         job.status = 'done';
         job.fraction = 1;

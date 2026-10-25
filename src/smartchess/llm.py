@@ -25,7 +25,8 @@ from .practical import PositionAnalysis
 
 URL = "https://api.groq.com/openai/v1/chat/completions"
 # qwen is the default (the user's choice), gpt-oss-120b the fallback. gpt-oss-20b is
-# left out: its explanations were often nonsensical.
+# left out: its explanations were often nonsensical. Llama 3.3 70B is gone from Groq
+# (404 model_not_found, Oct 2026) although the docs still list it.
 MODELS = ("qwen/qwen3.8-27b", "openai/gpt-oss-120b")
 TIMEOUT = 30
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
