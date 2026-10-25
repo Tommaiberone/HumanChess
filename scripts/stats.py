@@ -86,7 +86,7 @@ def main() -> None:
     ai = {k: total[k] for k in ("ai_start", "ai_ok", "ai_busy", "ai_fail")}
     if ai["ai_start"]:
         print(f"\nAI explanations: {ai['ai_start']} asked, {ai['ai_ok']} ok, {ai['ai_busy']} busy, {ai['ai_fail']} failed")
-    print(f"\nPGN pasted: {total['pgn.ok']} ok, {total['pgn.fail']} failed · About page opened: {total['about']}")
+    print(f"\nPGN pasted: {total['pgn.ok']} ok, {total['pgn.fail']} failed | About page opened: {total['about']}")
     print("Numbers are indicative: anyone can send counters to the endpoint, and a visitor with Do Not Track is not counted.")
 
 
