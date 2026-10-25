@@ -26,3 +26,22 @@ site/
 
 node_modules/
 src/smartchess/web/static/dist/
+
+# Never public: more secrets, cloud credentials, private notes and editor/agent state
+.env.*
+!.env.example
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+crash.log
+crash.*.log
+.aws/
+*.pem
+*.key
+PLAN.md
+PIANO.md
+.claude/
+.vscode/
+.idea/
+.DS_Store
