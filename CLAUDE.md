@@ -15,4 +15,6 @@ When a change is done and its checks pass, always commit it and deploy it, witho
 ## Checks before committing
 
 - `pnpm test` (the JavaScript port against the Python fixtures) and `uv run --no-sync pytest -q`
-- After a frontend change: `pnpm run build && uv run --no-sync smartchess export --out site`, then `node web-tests/e2e.mjs`, and `pnpm run fit` for anything that shows on a phone.
+- After a frontend change: `pnpm run build && uv run --no-sync smartchess export --out site --stats-url https://example.lambda-url.eu-west-1.on.aws/`, then `node web-tests/e2e.mjs`, `node web-tests/stats.mjs` (what the anonymous counters send) and `pnpm run fit` for anything that shows on a phone.
+- The counters have a closed list in `src/smartchess/web/stats_lambda.py`: a new `track('...')` in the frontend needs its name there (a test checks it), and the About page's privacy text must stay true.
+- Deploy the counters Lambda like the proxy: it is in `infra/app`, so `bash scripts/deploy_app.sh -auto-approve` then `scripts/deploy.sh`. Read the numbers with `uv run --no-project --with boto3 python scripts/stats.py`.

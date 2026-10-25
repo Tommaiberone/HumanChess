@@ -1,5 +1,6 @@
 import { Chessground } from './dist/chessground.js';
 import { Chess } from './dist/chess.js';
+import { track, trackView, bucket } from './stats.js';
 
 // ---------------------------------------------------------------- helpers
 
@@ -27,6 +28,8 @@ function el(tag, props = {}, ...kids) {
 const BROWSER = document.querySelector('meta[name="smartchess-mode"]')?.content === 'browser';
 // The explanation proxy (infra/app, llm_lambda.py): without it the browser version has only template explanations.
 const LLM_URL = document.querySelector('meta[name="smartchess-llm"]')?.content || '';
+// Anonymous counters (stats_lambda.py); described in the privacy note of the About page.
+const STATS_URL = document.querySelector('meta[name="smartchess-stats"]')?.content || '';
 // The fingerprint of this page's code (export.py), shown in the footer.
 const BUILD = document.querySelector('meta[name="smartchess-build"]')?.content || '';
 
@@ -45,6 +48,7 @@ document.addEventListener('visibilitychange', async () => {
   if (outdated && !location.hash.startsWith('#/game/')) location.reload();
 });
 if (BUILD) $('.site-footer')?.append(` · version ${BUILD}`);
+trackView(); // anonymous counters, see stats.js and the privacy note on the About page
 
 let backend = null;
 async function browserBackend() {
@@ -226,6 +230,7 @@ function route() {
 const REPO = 'https://github.com/Tommaiberone/HumanChess';
 
 function renderAbout() {
+  track('about');
   const app = $('#app');
   const section = (title, ...kids) => el('section', { class: 'card about' }, el('h2', {}, title), ...kids);
   const ext = (href, label) => el('a', { href, target: '_blank', rel: 'noopener' }, label);
@@ -246,7 +251,8 @@ function renderAbout() {
       el('p', {}, 'Stockfish is the objective judge. Maia-3, a neural network trained on millions of human games, predicts which moves players of a given rating actually play. A search combines the two, and every explanation is written from those numbers.'),
       el('p', { class: 'muted small' }, 'This is a beta. The rating conversion from Chess.com to the Maia scale is approximate, and results come from a light version of the engines (Stockfish 19 lite, Maia-3 5M) so that they run in your browser.')),
     section('Privacy',
-      el('p', {}, 'There is no account, no tracking and no cookie. The analysis runs on your device, in your browser: your games are downloaded from Chess.com or Lichess by your own browser and are never sent to this site or anywhere else.'),
+      el('p', {}, 'There is no account, no cookie and nothing stored on your device to recognise you. The analysis runs on your device, in your browser: your games are downloaded from Chess.com or Lichess by your own browser and are never sent to this site or anywhere else.'),
+      STATS_URL ? el('p', {}, 'To know whether the site works for people, it counts visits anonymously: a fixed list of totals such as the page opened, the kind of device (phone, tablet or desktop), the browser language, a coarse origin (for example "reddit"), whether a review finished and about how long it took, and the kind of error. Never your name, your games or any text you type. To count a visitor once a day, a code made from your IP address and browser, mixed with the date and a secret, is kept for 48 hours and then deleted; the address itself is not stored, and the code cannot be linked from one day to the next. Nothing is sent if your browser asks not to be tracked (Do Not Track or Global Privacy Control).') : null,
       el('p', {}, 'Reviews are saved only in this browser, so you do not wait twice. The first visit downloads about 37 MB of engine files, which are then cached.'),
       LLM_URL ? el('p', {}, 'The one exception is optional: if you press "rewrite with AI" under a review, the facts of each key moment (the position, the moves, the evaluations; no names, no account) are sent to a small proxy of this site and from there to Groq, which writes the explanations in prose. Nothing is sent unless you press it.') : null,
       el('button', { class: 'btn small', onclick: clear }, 'Delete everything saved in this browser')),
@@ -298,6 +304,7 @@ async function renderHome() {
     list.replaceChildren(...[1, 2, 3, 4].map(() => el('div', { class: 'game-row skeleton' })));
     try {
       const games = await api(`/api/games?user=${encodeURIComponent(user)}&time_class=${tc}&source=${encodeURIComponent(source)}`);
+      if (user) track(`list.${source === 'lichess' ? 'lichess' : 'chesscom'}.ok`);
       if (!games.length) {
         list.replaceChildren(el('p', { class: 'muted' }, 'No games found with this filter.'));
         return;
@@ -306,6 +313,7 @@ async function renderHome() {
       if (!user) rows.push(el('p', { class: 'muted small' }, 'Enter your username above to review your own games.'));
       list.replaceChildren(...rows);
     } catch (e) {
+      if (user) track(`list.${source === 'lichess' ? 'lichess' : 'chesscom'}.fail`);
       list.replaceChildren(el('p', { class: 'error' }, e.message));
     }
   }
@@ -348,8 +356,10 @@ function pgnPanel() {
     error.hidden = true;
     try {
       const { id } = await post('/api/pgn', { pgn: text.value, user_color: side.value });
+      track('pgn.ok');
       location.hash = `#/game/${id}`;
     } catch (err) {
+      track('pgn.fail');
       error.textContent = err.message;
       error.hidden = false;
     }
@@ -468,6 +478,8 @@ async function renderReview(id, startPly = 0) {
     return;
   }
   S.meta = game.summary;
+  S.src = S.meta.demo ? 'demo' : S.meta.source === 'lichess' ? 'lichess' : S.meta.source === 'pgn' ? 'pgn' : 'chesscom';
+  track(`open.${S.src}`);
   S.user = S.meta.username || S.user;
   S.startFen = game.start_fen;
   S.plies = game.plies;
@@ -504,18 +516,39 @@ async function pollJob(job, onTick) {
   return job;
 }
 
+// What went wrong, in four words for the counters (the message itself is never sent).
+const failKind = msg => /memory|allocation|out of/i.test(msg) ? 'mem' : /download|network|fetch|reach|load/i.test(msg) ? 'net'
+  : /engine|wasm|webassembly|onnx|worker/i.test(msg) ? 'engine' : 'other';
+const secsSince = t => (Date.now() - t) / 1000;
+const SECS = [30, 60, 120, 300];
+
 async function runReviewJob() {
+  const t0 = Date.now();
+  track(`review_start.${S.src}`);
+  track(`review_start.elo.${bucket(S.meta.user_maia_elo, [1000, 1400, 1800, 2200])}`);
   try {
     const job = await pollJob(await post(`/api/reviews/${S.id}?user=${encodeURIComponent(S.user)}`), j => { S.job = j; updateCoach(); });
     S.job = job;
+    if (job.status === 'done') {
+      track('review_done');
+      track(`review_done.secs.${bucket(secsSince(t0), SECS)}`);
+      track(`review_done.plies.${bucket(job.result?.plies?.length ?? 0, [40, 80, 120])}`);
+    } else if (job.status === 'error') {
+      track(`review_fail.${failKind(job.error || '')}`);
+    } else {
+      track('review_abandon'); // left while it was still analysing
+      track(`review_abandon.secs.${bucket(secsSince(t0), SECS)}`);
+    }
     if (S.alive && job.status === 'done') setReview(job.result);
   } catch (e) {
+    track(`review_fail.${failKind(e.message || '')}`);
     S.job = { status: 'error', error: e.message };
   }
   update();
 }
 
 async function runPositionJob() {
+  track('explore'); // the visitor analysed a position of their own
   const key = currentHistory().join(' ');
   const userTurn = turnOf(currentFen()) === S.meta.user_color;
   const body = {
@@ -535,11 +568,14 @@ async function runPositionJob() {
 }
 
 async function runNarrationJob() {
+  track('ai_start');
   try {
     const job = await pollJob(await post(`/api/reviews/${S.id}/narrations`), j => { S.narrJob = j; updateCoach(); });
     S.narrJob = job.notice ? { status: 'error', error: job.notice } : null;
+    track(job.notice || /busy|too many|limit/i.test(job.error || '') ? 'ai_busy' : job.status === 'done' ? 'ai_ok' : 'ai_fail');
     if (job.status === 'done') setReview(job.result);
   } catch (e) {
+    track(/busy|too many|limit/i.test(e.message || '') ? 'ai_busy' : 'ai_fail');
     S.narrJob = { status: 'error', error: e.message };
   }
   update();

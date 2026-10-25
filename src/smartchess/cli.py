@@ -172,6 +172,7 @@ def main(argv=None) -> int:
     exp.add_argument("--out", default="site")
     exp.add_argument("--data", help="folder with the demo games (default: data/)")
     exp.add_argument("--llm-url", default="", help="explanation proxy (terraform -chdir=infra/app output llm_url): enables 'rewrite with AI'")
+    exp.add_argument("--stats-url", default="", help="anonymous counters (terraform -chdir=infra/app output stats_url)")
     exp.set_defaults(func=cmd_export)
 
     args = parser.parse_args(argv)
@@ -181,7 +182,7 @@ def main(argv=None) -> int:
 def cmd_export(args) -> int:
     from .web.export import export_site
 
-    ids = export_site(Path(args.out), Path(args.data) if args.data else None, args.llm_url)
+    ids = export_site(Path(args.out), Path(args.data) if args.data else None, args.llm_url, args.stats_url)
     print(f"Exported the site with {len(ids)} demo games to {Path(args.out).resolve()}")
     return 0
 

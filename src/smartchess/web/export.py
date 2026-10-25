@@ -20,17 +20,21 @@ from .store import LocalStore
 
 MODE_META = '<meta name="smartchess-mode" content="browser">'
 # Scripts, workers, fonts and styles only from this site; the page may fetch games from
-# Chess.com and Lichess and, if configured, ask the explanation proxy (llm_lambda.py).
+# Chess.com and Lichess and, if configured, ask the explanation proxy (llm_lambda.py) and
+# report anonymous counters (stats_lambda.py).
 # 'wasm-unsafe-eval' lets WebAssembly compile.
 
 
-def head_meta(llm_url: str = "", build: str = "") -> str:
-    """The <meta> tags of the public index: mode, CSP, referrer, the build, and the explanation proxy if any."""
+def head_meta(llm_url: str = "", build: str = "", stats_url: str = "") -> str:
+    """The <meta> tags of the public index: mode, CSP, referrer, the build, and the explanation proxy and counters if any."""
     connect = "'self' https://api.chess.com https://lichess.org"
     extra = ""
     if llm_url:
         connect += " " + llm_url.rstrip("/")
         extra = f'\n  <meta name="smartchess-llm" content="{llm_url}">'
+    if stats_url:
+        connect += " " + stats_url.rstrip("/")
+        extra += f'\n  <meta name="smartchess-stats" content="{stats_url}">'
     if build:
         extra += f'\n  <meta name="smartchess-build" content="{build}">'
     csp = (
@@ -54,7 +58,7 @@ def demos(data: Path) -> list[dict]:
     return out
 
 
-def export_site(out: Path, data: Path | None = None, llm_url: str = "") -> list[str]:
+def export_site(out: Path, data: Path | None = None, llm_url: str = "", stats_url: str = "") -> list[str]:
     """Write the site to `out` and return the ids of its demo games."""
     if not (STATIC_DIR / "dist" / "backend.js").exists():
         raise SystemExit("The browser bundles are missing: run `pnpm install && pnpm run build` first")
@@ -65,7 +69,7 @@ def export_site(out: Path, data: Path | None = None, llm_url: str = "") -> list[
     (out / "static" / "demos.json").write_text(json.dumps(shown, ensure_ascii=False), encoding="utf-8")
 
     index = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    meta = head_meta(llm_url, build_id(out / "static", index))
+    meta = head_meta(llm_url, build_id(out / "static", index), stats_url)
     index = index.replace('<meta charset="utf-8">', f'<meta charset="utf-8">\n  {meta}', 1)
     (out / "index.html").write_text(index, encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")  # GitHub Pages: serve every file as it is

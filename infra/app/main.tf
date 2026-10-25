@@ -132,13 +132,13 @@ resource "aws_iam_role_policy" "api" {
 }
 
 resource "aws_iam_role_policy_attachment" "logs" {
-  for_each   = { worker = aws_iam_role.worker.name, api = aws_iam_role.api.name, llm = aws_iam_role.llm.name }
+  for_each   = { worker = aws_iam_role.worker.name, api = aws_iam_role.api.name, llm = aws_iam_role.llm.name, stats = aws_iam_role.stats.name }
   role       = each.value
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
 resource "aws_cloudwatch_log_group" "fn" {
-  for_each          = toset(["worker", "api", "llm"])
+  for_each          = toset(["worker", "api", "llm", "stats"])
   name              = "/aws/lambda/${local.prefix}-${each.key}"
   retention_in_days = 14
 }
@@ -280,6 +280,84 @@ resource "aws_lambda_permission" "llm_invoke" {
   statement_id             = "FunctionUrlAllowInvokeAction"
   action                   = "lambda:InvokeFunction"
   function_name            = aws_lambda_function.llm.function_name
+  principal                = "*"
+  invoked_via_function_url = true
+}
+
+# -- anonymous counters for the public site ------------------------------------------
+# src/smartchess/web/stats_lambda.py adds counters from a closed list to the day's totals
+# and keeps "seen today" markers for 48 hours (TTL). Free tier: Lambda requests, a function
+# URL and a few DynamoDB writes; boto3 comes with the runtime, so no layer.
+
+resource "random_password" "stats_salt" {
+  length  = 32
+  special = false
+}
+
+data "aws_iam_policy_document" "stats" {
+  statement {
+    actions   = ["dynamodb:UpdateItem", "dynamodb:PutItem"]
+    resources = [aws_dynamodb_table.data.arn]
+  }
+}
+
+resource "aws_iam_role" "stats" {
+  name               = "${local.prefix}-stats"
+  assume_role_policy = data.aws_iam_policy_document.assume.json
+}
+
+resource "aws_iam_role_policy" "stats" {
+  role   = aws_iam_role.stats.id
+  policy = data.aws_iam_policy_document.stats.json
+}
+
+resource "aws_lambda_function" "stats" {
+  function_name    = "${local.prefix}-stats"
+  role             = aws_iam_role.stats.arn
+  runtime          = "python3.12"
+  handler          = "smartchess.web.stats_lambda.handler"
+  filename         = "${local.build}/app.zip"
+  source_code_hash = filebase64sha256("${local.build}/app.zip")
+  architectures    = ["x86_64"]
+  memory_size      = 128
+  timeout          = 10
+
+  environment {
+    variables = {
+      SMARTCHESS_TABLE = aws_dynamodb_table.data.name
+      ALLOWED_ORIGIN   = var.site_origin
+      STATS_SALT       = random_password.stats_salt.result
+      STATS_CAMPAIGNS  = var.stats_campaigns
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.fn, aws_iam_role_policy_attachment.logs]
+}
+
+resource "aws_lambda_function_url" "stats" {
+  function_name      = aws_lambda_function.stats.function_name
+  authorization_type = "NONE"
+
+  cors {
+    allow_origins = [var.site_origin]
+    allow_methods = ["POST"]
+    allow_headers = ["content-type"]
+    max_age       = 3600
+  }
+}
+
+resource "aws_lambda_permission" "stats_url" {
+  statement_id           = "FunctionUrlAllowPublicAccess"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.stats.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}
+
+resource "aws_lambda_permission" "stats_invoke" {
+  statement_id             = "FunctionUrlAllowInvokeAction"
+  action                   = "lambda:InvokeFunction"
+  function_name            = aws_lambda_function.stats.function_name
   principal                = "*"
   invoked_via_function_url = true
 }

@@ -37,6 +37,10 @@ page.on('pageerror', e => problems.push(`pageerror: ${e.message}`));
 page.on('response', r => { if (r.status() >= 400) problems.push('http ' + r.status() + ' ' + r.url()); });
 page.on('requestfailed', r => problems.push(`requestfailed: ${r.url()} ${r.failure()?.errorText}`));
 
+// The anonymous counters are not the subject here (web-tests/stats.mjs checks them): answer them locally.
+const statsUrl = readFileSync(join(SITE, 'index.html'), 'utf-8').match(/name="smartchess-stats" content="([^"]+)"/)?.[1];
+if (statsUrl) await page.route(statsUrl + '**', route => route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } }));
+
 await page.goto(base);
 try {
   await page.waitForSelector('.game-row', { timeout: 15000 });

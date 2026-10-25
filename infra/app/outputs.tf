@@ -16,3 +16,8 @@ output "llm_url" {
   description = "Explanation proxy for the public site (scripts/deploy.sh passes it to the export)."
   value       = aws_lambda_function_url.llm.function_url
 }
+
+output "stats_url" {
+  description = "Anonymous counters for the public site (scripts/deploy.sh passes it to the export)."
+  value       = aws_lambda_function_url.stats.function_url
+}

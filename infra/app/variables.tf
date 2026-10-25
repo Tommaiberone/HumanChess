@@ -61,7 +61,7 @@ variable "read_capacity" {
 
 variable "write_capacity" {
   type    = number
-  default = 5
+  default = 10 # the rate-limit counters and the anonymous visit counters (the free tier allows 25 per account)
 }
 
 variable "site_origin" {
@@ -80,4 +80,10 @@ variable "llm_per_day" {
   description = "Explanation requests the proxy answers per day, whoever asks: keeps the Groq free quota from running out."
   type        = number
   default     = 1500
+}
+
+variable "stats_campaigns" {
+  description = "Names a link may carry as ?from=<name> to count visits per post (comma separated, [a-z0-9] only)."
+  type        = string
+  default     = "chess,chessbeginners,lichess,chessprogramming,hn,x,friends"
 }
