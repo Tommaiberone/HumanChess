@@ -16,7 +16,7 @@ Stockfish is the objective oracle. [Maia-3](https://github.com/CSSLab/maia3) pre
 
 ## Setup
 
-Requires [uv](https://docs.astral.sh/uv/) and Python 3.12, plus Node 22 for the web part (`npm install`).
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.12, plus Node 22 for the web part (`pnpm install`).
 
 ```sh
 uv sync --python 3.12
@@ -31,7 +31,7 @@ Put a Stockfish binary under `engines/stockfish/`, or set `SMARTCHESS_STOCKFISH`
 uv run smartchess web --user <chess.com username>
 
 # The public site, analysis in the browser: build it once, then serve the folder
-npm install && npm run build
+pnpm install && pnpm run build
 uv run --no-sync --with onnx --with onnxruntime python scripts/export_onnx.py maia3-5m models   # once
 uv run smartchess export --out site && python -m http.server -d site 8000
 
@@ -72,7 +72,7 @@ Measured on this laptop, a 92-ply game takes about 1 minute with 4 workers (Node
 
 Searches stop at a node count, never at a time limit, and every task starts from a clean engine: **the same game always gives the same review**, on any device. (The Python reviews depend on timing and on the order engines pick up positions: two runs of the same game agree on only about 60% of their key moments.)
 
-`web-tests/` checks the port against the Python code: `scripts/make_web_fixtures.py` records what Python says for 97 positions (every legal move with its SAN, motifs and threats, Maia probabilities) and `npm test` requires the same from JavaScript. `node web-tests/e2e.mjs` drives the exported site in Chromium, and `npm run fit` opens every view of the review in the room phone browsers really leave (with their bars) and reports the board's width, the smallest text and whether the explanation starts in sight; it fails if the page scrolls or a text is under 12px.
+`web-tests/` checks the port against the Python code: `scripts/make_web_fixtures.py` records what Python says for 97 positions (every legal move with its SAN, motifs and threats, Maia probabilities) and `pnpm test` requires the same from JavaScript. `node web-tests/e2e.mjs` drives the exported site in Chromium, and `pnpm run fit` opens every view of the review in the room phone browsers really leave (with their bars) and reports the board's width, the smallest text and whether the explanation starts in sight; it fails if the page scrolls or a text is under 12px.
 
 On a phone the review is a single screen laid out like the chess apps: the board as wide as the screen (a thin eval strip above it), the coach panel below with cards for "your move", best, simplest and trickiest and only the chosen one explained, and the controls at the bottom, under the thumb. The text stays readable (16px explanations): when it is longer than the room left, the panel scrolls and the board stays put. In landscape the board takes the full height on the left. Added to the home screen (a web app manifest, `scripts/make_icons.mjs` draws the icons) the site opens without the browser's bars, which leaves the panel twice the room.
 

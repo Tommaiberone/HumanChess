@@ -5,7 +5,7 @@
 //   ort/                the ONNX Runtime Web WASM files
 //   chessground.js, chess.js and chessground*.css  the board libraries (no CDN)
 //   models/             maia3-5m.onnx (scripts/export_onnx.py), if exported
-// Usage: npm run build
+// Usage: pnpm run build
 
 import { build } from 'esbuild';
 import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';

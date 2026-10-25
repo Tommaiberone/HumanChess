@@ -15,8 +15,8 @@ PROFILE="${AWS_PROFILE_NAME:-job-radar}"
 if [ ! -f models/maia3-5m.onnx ]; then
   uv run --no-sync --with onnx --with onnxruntime python scripts/export_onnx.py maia3-5m models
 fi
-npm ci
-npm run build
+pnpm install --frozen-lockfile
+pnpm run build
 # The explanation proxy (infra/app) is optional: without it the site keeps the template explanations.
 LLM_URL="${SMARTCHESS_LLM_URL:-$(terraform -chdir=infra/app output -raw llm_url 2>/dev/null || true)}"
 uv run smartchess export --out site --llm-url "$LLM_URL"

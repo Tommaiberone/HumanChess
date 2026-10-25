@@ -1,5 +1,9 @@
 # SmartChess
 
+## Package manager: pnpm, never npm
+
+Always use `pnpm` for the JavaScript side (`pnpm install`, `pnpm run build`, `pnpm test`), never `npm` or `npx`. The lockfile is `pnpm-lock.yaml`; build scripts are allowed in `pnpm-workspace.yaml` (`allowBuilds`).
+
 ## After every change: commit and deploy
 
 When a change is done and its checks pass, always commit it and deploy it, without asking first.
@@ -10,5 +14,5 @@ When a change is done and its checks pass, always commit it and deploy it, witho
 
 ## Checks before committing
 
-- `npm test` (the JavaScript port against the Python fixtures) and `uv run --no-sync pytest -q`
-- After a frontend change: `npm run build && uv run --no-sync smartchess export --out site`, then `node web-tests/e2e.mjs`, and `npm run fit` for anything that shows on a phone.
+- `pnpm test` (the JavaScript port against the Python fixtures) and `uv run --no-sync pytest -q`
+- After a frontend change: `pnpm run build && uv run --no-sync smartchess export --out site`, then `node web-tests/e2e.mjs`, and `pnpm run fit` for anything that shows on a phone.

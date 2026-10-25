@@ -2,7 +2,7 @@
 
 index.html carries <meta name="smartchess-mode" content="browser">, so the frontend
 fetches games from Chess.com or Lichess itself and runs Stockfish and Maia in the
-visitor's browser (static/dist, built by `npm run build`). The only data shipped
+visitor's browser (static/dist, built by `pnpm run build`). The only data shipped
 besides the app is the demo games, hand-built records in data/games/demo*.json with
 their reviews, listed first for every visitor.
 """
@@ -57,7 +57,7 @@ def demos(data: Path) -> list[dict]:
 def export_site(out: Path, data: Path | None = None, llm_url: str = "") -> list[str]:
     """Write the site to `out` and return the ids of its demo games."""
     if not (STATIC_DIR / "dist" / "backend.js").exists():
-        raise SystemExit("The browser bundles are missing: run `npm install && npm run build` first")
+        raise SystemExit("The browser bundles are missing: run `pnpm install && pnpm run build` first")
     if out.exists():
         shutil.rmtree(out)
     shutil.copytree(STATIC_DIR, out / "static", ignore=shutil.ignore_patterns("login.html", "index.html", "demos.json"))

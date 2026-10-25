@@ -1,6 +1,6 @@
 // End-to-end check in a real browser: serves the exported site, opens it, reviews a pasted
 // game with the workers and WebAssembly, and reports what the page printed.
-// Usage: node web-tests/e2e.mjs [GAME_ID] [CHROMIUM_PATH]   (npm run build && smartchess export first)
+// Usage: node web-tests/e2e.mjs [GAME_ID] [CHROMIUM_PATH]   (pnpm run build && smartchess export first)
 
 import { createServer } from 'node:http';
 import { createReadStream, readFileSync, statSync } from 'node:fs';
