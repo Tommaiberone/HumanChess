@@ -1,6 +1,6 @@
 {
-  "name": "SmartChess",
-  "short_name": "SmartChess",
+  "name": "HumanChess",
+  "short_name": "HumanChess",
   "description": "Game reviews that talk to you like a friend: at every key moment, the best, the simplest and the trickiest move.",
   "start_url": "/",
   "scope": "/",

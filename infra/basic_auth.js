@@ -8,7 +8,7 @@ function handler(event) {
     return {
       statusCode: 401,
       statusDescription: 'Unauthorized',
-      headers: { 'www-authenticate': { value: 'Basic realm="SmartChess", charset="UTF-8"' } },
+      headers: { 'www-authenticate': { value: 'Basic realm="HumanChess", charset="UTF-8"' } },
     };
   }
   return event.request;

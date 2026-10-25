@@ -223,7 +223,7 @@ function route() {
 
 // ---------------------------------------------------------------- about
 
-const REPO = 'https://github.com/Tommaiberone/SmartChess';
+const REPO = 'https://github.com/Tommaiberone/HumanChess';
 
 function renderAbout() {
   const app = $('#app');
@@ -237,7 +237,7 @@ function renderAbout() {
     location.reload();
   };
   app.replaceChildren(
-    el('section', { class: 'hero' }, el('h1', {}, 'About SmartChess'),
+    el('section', { class: 'hero' }, el('h1', {}, 'About HumanChess'),
       el('p', { class: 'muted' }, 'A game review that asks what a player like you can actually play, not only what a computer would.')),
     section('How it works',
       el('p', {}, 'For each key moment of your game you get three moves. ', el('b', {}, 'Best'), ' is what Stockfish plays. ',
@@ -251,7 +251,7 @@ function renderAbout() {
       LLM_URL ? el('p', {}, 'The one exception is optional: if you press "rewrite with AI" under a review, the facts of each key moment (the position, the moves, the evaluations; no names, no account) are sent to a small proxy of this site and from there to Groq, which writes the explanations in prose. Nothing is sent unless you press it.') : null,
       el('button', { class: 'btn small', onclick: clear }, 'Delete everything saved in this browser')),
     section('Open source',
-      el('p', {}, 'SmartChess is free software under the ', ext('https://www.gnu.org/licenses/agpl-3.0.html', 'GNU AGPL v3'), ': ',
+      el('p', {}, 'HumanChess is free software under the ', ext('https://www.gnu.org/licenses/agpl-3.0.html', 'GNU AGPL v3'), ': ',
         ext(REPO, 'source code'), '. It is built on ', ext('https://stockfishchess.org', 'Stockfish'), ' (GPL-3.0, WebAssembly build by ',
         ext('https://github.com/nmrugg/stockfish.js', 'stockfish.js'), '), ', ext('https://github.com/CSSLab/maia3', 'Maia-3'),
         ' (AGPL-3.0), ', ext('https://github.com/lichess-org/chessops', 'chessops'), ', ', ext('https://github.com/lichess-org/chessground', 'Chessground'),

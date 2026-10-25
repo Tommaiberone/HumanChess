@@ -1,4 +1,4 @@
-# SmartChess
+# HumanChess
 
 ## Package manager: pnpm, never npm
 

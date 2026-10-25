@@ -200,7 +200,7 @@ def cmd_web(args) -> int:
     url = f"http://127.0.0.1:{args.port}/"
     if not args.no_browser:
         threading.Timer(1.5, webbrowser.open, [url]).start()
-    print(f"SmartChess: {url}")
+    print(f"HumanChess: {url}")
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
     return 0
 

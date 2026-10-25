@@ -2,7 +2,7 @@
   "name": "smartchess-web",
   "private": true,
   "type": "module",
-  "description": "In-browser analysis (Stockfish WASM + Maia-3 ONNX) for SmartChess",
+  "description": "In-browser analysis (Stockfish WASM + Maia-3 ONNX) for HumanChess",
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "build": "node scripts/build_web.mjs",

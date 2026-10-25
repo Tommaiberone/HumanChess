@@ -1,4 +1,6 @@
-# SmartChess
+# HumanChess
+
+*Formerly SmartChess: the Python package, the `smartchess` command and the AWS resources keep that name.*
 
 Human-aware chess game review. For each critical position of your game it shows three moves:
 
@@ -61,7 +63,7 @@ In both Maia modes, human nodes are weighted by Maia's probabilities, and the le
 
 ## The public site: analysis in the visitor's browser
 
-Anyone can use SmartChess without a server doing the work. `smartchess export --out site` writes a static folder (HTML, JS, WebAssembly and the Maia-3 model) that any static host can serve; the visitor's own device runs the analysis:
+Anyone can use HumanChess without a server doing the work. `smartchess export --out site` writes a static folder (HTML, JS, WebAssembly and the Maia-3 model) that any static host can serve; the visitor's own device runs the analysis:
 
 - games come straight from the **Chess.com** and **Lichess** public APIs (both allow requests from any page), or from a pasted **PGN**;
 - **Stockfish 19 lite** (WebAssembly, single thread, `stockfish` on npm) and **Maia-3 5M** (ONNX on ONNX Runtime Web, `scripts/export_onnx.py`) run in a pool of Web Workers, 4 on a desktop and 2 on a phone. The search is the same expectimax as the Python one (`src/smartchess/web/analysis/`, a port of `practical.py`, `review.py`, `facts.py`, `motifs.py` and `explain.py` on top of [chessops](https://github.com/lichess-org/chessops));

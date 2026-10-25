@@ -35,5 +35,5 @@ $TF apply -input=false "$@"
 PYTHONPATH=src uv run --no-project --python 3.12 --with boto3 python -m smartchess.web.seed "$($TF output -raw table)" data
 
 echo
-echo "SmartChess: $($TF output -raw url)"
+echo "HumanChess: $($TF output -raw url)"
 echo "Password: terraform -chdir=infra/app output -raw password"

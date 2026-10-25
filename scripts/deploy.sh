@@ -26,4 +26,4 @@ terraform -chdir=infra apply -input=false "$@"
 DIST="$(terraform -chdir=infra output -raw distribution_id)"
 aws cloudfront create-invalidation --profile "$PROFILE" --distribution-id "$DIST" --paths "/*" >/dev/null
 echo
-echo "SmartChess: $(terraform -chdir=infra output -raw url)"
+echo "HumanChess: $(terraform -chdir=infra output -raw url)"

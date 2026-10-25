@@ -131,7 +131,7 @@ def write_report(review: GameReview, path: str | Path) -> Path:
     doc = (
         f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
         f'<meta name="viewport" content="width=device-width, initial-scale=1">'
-        f"<title>SmartChess review</title><style>{CSS}</style></head><body><main>"
+        f"<title>HumanChess review</title><style>{CSS}</style></head><body><main>"
         f"<h1>{html.escape(title)}</h1><div class=\"meta\">{meta}</div>"
         f'<div class="legend">{legend}</div><br>{body}</main></body></html>'
     )

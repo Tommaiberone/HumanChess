@@ -9,7 +9,7 @@ import chess.pgn
 import requests
 
 # Chess.com asks API clients to identify themselves.
-USER_AGENT = "SmartChess/0.1 (personal open-source game review tool)"
+USER_AGENT = "HumanChess/0.1 (personal open-source game review tool)"
 
 
 def read_pgn_file(path: str | Path) -> list[chess.pgn.Game]:

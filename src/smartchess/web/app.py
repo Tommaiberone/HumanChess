@@ -41,7 +41,7 @@ def create_app(service: Service | None = None, default_user: str | None = None,
         yield
         service.close()
 
-    app = FastAPI(title="SmartChess", lifespan=lifespan)
+    app = FastAPI(title="HumanChess", lifespan=lifespan)
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
     @app.middleware("http")
