@@ -120,7 +120,7 @@ export function createBackend({ base, demosUrl, llmUrl = '', poolOptions = {} })
       const fetch = source === 'lichess' ? fetchLichess : fetchChesscom;
       const games = await fetch(user, limit, timeClass);
       for (const g of games) {
-        if (!(await storage.get('games', gameId(g)))) await storage.put('games', gameId(g), g);
+        await storage.put('games', gameId(g), g); // always the fresh record: a stored one may predate a fix
         await add(g);
       }
     }
